@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="split">
+  <div class="card">
+    <h2>Records</h2>
+    <p>Search one zone or all zones recursively by host fragment and record type. The result table shows one DNS record per row.</p>
+
+    <form method="get" class="form-grid">
+      <div class="form-row">
+        <div>
+          <label for="name">Hostname contains</label>
+          <input id="name" name="name" placeholder="app, grafana, dc" value="{{ name }}">
+        </div>
+        <div>
+          <label for="zone">Zone</label>
+          <input id="zone" name="zone" placeholder="contoso.com" value="{{ zone_name }}">
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label for="type">Record type</label>
+          <select id="type" name="type">
+            {% for t in ['ALL','A','AAAA','CNAME','NS','TXT','SRV','MX','PTR'] %}
+              <option value="{{ t }}" {% if record_type == t %}selected{% endif %}>{{ t }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="recursive">Scope</label>
+          <select id="recursive" name="recursive">
+            <option value="false" {% if not recursive %}selected{% endif %}>This zone</option>
+            <option value="true" {% if recursive %}selected{% endif %}>All zones</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="submit">Search</button>
+        <a class="button secondary" href="/records">Reset</a>
+      </div>
+      <p class="helper">Leave zone blank and choose <strong>All zones</strong> to search recursively across the server. Set a zone to browse just that zone.</p>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>Actions</h3>
+    <p class="helper">Use the inline buttons next to each record to add a sibling record, edit the record, or remove it without leaving this page.</p>
+    <div class="form-actions">
+      {% if can_manage %}
+        <button
+          type="button"
+          class="button"
+          data-record-action="add"
+          data-zone="{{ zone_name or zone }}"
+          data-name=""
+          data-type="{{ record_type if record_type != 'ALL' else 'A' }}"
+          data-value=""
+          data-ttl="3600"
+        >Add record</button>
+      {% endif %}
+      <span class="chip">{{ records|length }} match{{ '' if records|length == 1 else 'es' }}</span>
+    </div>
+  </div>
+</section>
+
+<section class="card">
+  <div class="form-actions" style="justify-content:space-between; margin-bottom: 14px;">
+    <div>
+      <h2 style="margin-bottom:4px;">Search results</h2>
+      <p class="helper">Zone scope <span class="mono">{{ scope_label }}</span> on <span class="mono">{{ server }}</span>.</p>
+    </div>
+  </div>
+
+  {% if records %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            {% if recursive %}<th>Zone</th>{% endif %}
+            <th>Type</th>
+            <th>Target</th>
+            <th>TTL</th>
+            {% if can_manage %}<th>Actions</th>{% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for record in records %}
+            <tr>
+              {% if recursive %}<td class="mono">{{ record.zone }}</td>{% endif %}
+              <td>{{ record.type }}</td>
+              <td class="mono value-cell">{{ record.target }}</td>
+              <td class="mono">{{ record.ttl }}</td>
+              {% if can_manage %}
+                <td>
+                  <div class="record-actions">
+                    <button
+                      type="button"
+                      class="icon-button secondary"
+                      data-record-action="add"
+                      data-zone="{{ record.zone or zone_name or zone }}"
+                      data-name="{{ record.name }}"
+                      data-type="{{ record.type }}"
+                      data-value="{{ record.target }}"
+                      data-ttl="{{ record.ttl_seconds or 3600 }}"
+                    >+</button>
+                    <button
+                      type="button"
+                      class="icon-button secondary"
+                      data-record-action="edit"
+                      data-zone="{{ record.zone or zone_name or zone }}"
+                      data-name="{{ record.name }}"
+                      data-type="{{ record.type }}"
+                      data-value="{{ record.target }}"
+                      data-ttl="{{ record.ttl_seconds or 3600 }}"
+                      data-original-zone="{{ record.zone or zone_name or zone }}"
+                      data-original-name="{{ record.name }}"
+                      data-original-type="{{ record.type }}"
+                      data-original-target="{{ record.target }}"
+                    >⚙</button>
+                    <button
+                      type="button"
+                      class="icon-button danger"
+                      data-record-action="delete"
+                      data-zone="{{ record.zone or zone_name or zone }}"
+                      data-name="{{ record.name }}"
+                      data-type="{{ record.type }}"
+                      data-value="{{ record.target }}"
+                      data-ttl="{{ record.ttl_seconds or 3600 }}"
+                      data-original-zone="{{ record.zone or zone_name or zone }}"
+                      data-original-name="{{ record.name }}"
+                      data-original-type="{{ record.type }}"
+                      data-original-target="{{ record.target }}"
+                    >-</button>
+                  </div>
+                </td>
+              {% endif %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state">
+      No records matched your search.
+      {% if output %}
+        <div class="rule"></div>
+        <details>
+          <summary>Show raw command output</summary>
+          <pre class="mono" style="white-space:pre-wrap; margin-top:12px;">{{ output }}</pre>
+        </details>
+      {% endif %}
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

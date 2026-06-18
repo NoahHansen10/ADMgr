@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="split">
+  <div class="card">
+    <h2>Zones</h2>
+    <p>View and manage primary, secondary, stub, and reverse lookup zones on {{ server }}.</p>
+
+    <form method="get" class="form-grid">
+      <div>
+        <label for="name">Filter zones</label>
+        <input id="name" name="name" placeholder="contoso, 168.192, _msdcs" value="{{ search }}">
+      </div>
+      <div class="form-actions">
+        <button type="submit">Search</button>
+        <a class="button secondary" href="/zones">Reset</a>
+      </div>
+    </form>
+    {% if can_manage %}
+      <div class="form-actions" style="margin-top:14px;">
+        <button type="button" class="button" data-zone-modal="create">Add zone</button>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h3>Create zone</h3>
+    <form method="post" class="form-grid">
+      <input type="hidden" name="action" value="create">
+      <div class="form-row">
+        <div>
+          <label for="zone_type">Zone type</label>
+          <select id="zone_type" name="zone_type">
+            <option value="primary">Primary</option>
+            <option value="secondary">Secondary</option>
+            <option value="stub">Stub</option>
+          </select>
+        </div>
+        <div>
+          <label for="replication_scope">Replication scope</label>
+          <input id="replication_scope" name="replication_scope" value="Forest" placeholder="Forest or Domain">
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label for="zone_name">Zone name</label>
+          <input id="zone_name" name="zone_name" placeholder="lab.contoso.com">
+        </div>
+        <div>
+          <label for="reverse_network">Reverse network ID</label>
+          <input id="reverse_network" name="reverse_network" placeholder="10.1.0.0/24">
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label for="master_servers">Master servers</label>
+          <input id="master_servers" name="master_servers" placeholder="10.0.0.10,10.0.0.11">
+        </div>
+        <div>
+          <label for="zone_file">Zone file</label>
+          <input id="zone_file" name="zone_file" placeholder="lab.contoso.com.dns">
+        </div>
+      </div>
+      <p class="helper">Use a zone name for forward zones and a reverse network ID for reverse lookup zones. Master servers are required for secondary and stub zones.</p>
+      <div class="form-actions">
+        <button type="submit">Create zone</button>
+      </div>
+    </form>
+  </div>
+</section>
+
+<section class="card">
+  <div class="form-actions" style="justify-content:space-between; margin-bottom: 14px;">
+    <div>
+      <h2 style="margin-bottom:4px;">Configured zones</h2>
+      <p class="helper">{{ zone_count }} zones found.</p>
+    </div>
+  </div>
+
+  {% if zone_rows %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Zone</th>
+            <th>Type</th>
+            <th>Reverse</th>
+            <th>DS Integrated</th>
+            <th>Signed</th>
+            <th>Aging</th>
+            {% if can_manage %}<th>Actions</th>{% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for zone in zone_rows %}
+            <tr>
+              <td class="mono">{{ zone.name }}</td>
+              <td>{{ zone.type }}</td>
+              <td>{{ zone.reverse }}</td>
+              <td>{{ zone.ds }}</td>
+              <td>{{ zone.signed }}</td>
+              <td>{{ zone.aging }}</td>
+              {% if can_manage %}
+                <td>
+                  <div class="record-actions">
+                    {% set aging_on = zone.aging in [True, 'True', 'true', 'Enabled', 'enabled', 'Yes', 'yes'] %}
+                    <button
+                      type="button"
+                      class="icon-button secondary"
+                      data-zone-age-toggle
+                      data-zone-name="{{ zone.name }}"
+                      data-aging-enabled="{{ 'true' if aging_on else 'false' }}"
+                    >⚙</button>
+                    <button
+                      type="button"
+                      class="icon-button danger"
+                      data-zone-delete
+                      data-zone-name="{{ zone.name }}"
+                    >-</button>
+                  </div>
+                </td>
+              {% endif %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state">No zones matched your search.</div>
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block page_scripts %}
+  <dialog id="zoneModal" class="record-dialog" aria-labelledby="zoneModalTitle">
+    <div class="record-dialog-panel">
+      <div class="record-dialog-header">
+        <div>
+          <div class="eyebrow">DNS zone</div>
+          <h3 id="zoneModalTitle" class="record-dialog-title">Zone action</h3>
+        </div>
+        <button type="button" class="secondary" data-zone-modal-close>Close</button>
+      </div>
+      <p id="zoneModalSummary" class="record-dialog-summary"></p>
+
+      <form method="post" action="/zones" id="zoneModalForm" class="form-grid">
+        <input type="hidden" name="action" id="zoneModalAction">
+        <input type="hidden" name="zone_name" id="zoneModalZoneName">
+        <input type="hidden" name="aging_enabled" id="zoneModalAgingEnabled">
+
+        <div class="dialog-section" id="zoneCreateFields">
+          <div class="form-row">
+            <div>
+              <label for="zoneModalZoneType">Zone type</label>
+              <select id="zoneModalZoneType" name="zone_type">
+                <option value="primary">Primary</option>
+                <option value="secondary">Secondary</option>
+                <option value="stub">Stub</option>
+              </select>
+            </div>
+            <div>
+              <label for="zoneModalReplication">Replication scope</label>
+              <input id="zoneModalReplication" name="replication_scope" value="Forest" placeholder="Forest or Domain">
+            </div>
+          </div>
+          <div class="form-row">
+            <div>
+              <label for="zoneModalZoneNameInput">Zone name</label>
+              <input id="zoneModalZoneNameInput" name="zone_name_input" placeholder="lab.contoso.com">
+            </div>
+            <div>
+              <label for="zoneModalReverseNetwork">Reverse network ID</label>
+              <input id="zoneModalReverseNetwork" name="reverse_network" placeholder="10.1.0.0/24">
+            </div>
+          </div>
+          <div class="form-row">
+            <div>
+              <label for="zoneModalMasterServers">Master servers</label>
+              <input id="zoneModalMasterServers" name="master_servers" placeholder="10.0.0.10,10.0.0.11">
+            </div>
+            <div>
+              <label for="zoneModalZoneFile">Zone file</label>
+              <input id="zoneModalZoneFile" name="zone_file" placeholder="lab.contoso.com.dns">
+            </div>
+          </div>
+          <p class="helper">Use a zone name for forward zones and a reverse network ID for reverse lookup zones. Master servers are required for secondary and stub zones.</p>
+        </div>
+
+        <div class="dialog-section field-hidden" id="zoneManageFields">
+          <p class="helper" id="zoneManageHelp"></p>
+        </div>
+
+        <div class="dialog-section field-hidden" id="zoneDeleteFields">
+          <p class="helper">This deletes the zone immediately.</p>
+        </div>
+
+        <div class="form-actions" style="justify-content:flex-end;">
+          <button type="button" class="secondary" data-zone-modal-close>Cancel</button>
+          <button type="submit" id="zoneModalSubmit">Save</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <script>
+    (() => {
+      const modal = document.getElementById('zoneModal');
+      const title = document.getElementById('zoneModalTitle');
+      const summary = document.getElementById('zoneModalSummary');
+      const form = document.getElementById('zoneModalForm');
+      const action = document.getElementById('zoneModalAction');
+      const zoneName = document.getElementById('zoneModalZoneName');
+      const agingEnabled = document.getElementById('zoneModalAgingEnabled');
+      const createFields = document.getElementById('zoneCreateFields');
+      const manageFields = document.getElementById('zoneManageFields');
+      const deleteFields = document.getElementById('zoneDeleteFields');
+      const manageHelp = document.getElementById('zoneManageHelp');
+      const submit = document.getElementById('zoneModalSubmit');
+
+      const zoneType = document.getElementById('zoneModalZoneType');
+      const replicationScope = document.getElementById('zoneModalReplication');
+      const zoneNameInput = document.getElementById('zoneModalZoneNameInput');
+      const reverseNetwork = document.getElementById('zoneModalReverseNetwork');
+      const masterServers = document.getElementById('zoneModalMasterServers');
+      const zoneFile = document.getElementById('zoneModalZoneFile');
+
+      function hide(el, shouldHide) {
+        if (!el) return;
+        el.classList.toggle('field-hidden', shouldHide);
+      }
+
+      function openZoneModal(mode, payload = {}) {
+        const name = payload.zoneName || payload.name || '';
+        const aged = payload.agingEnabled === 'true' || payload.agingEnabled === true;
+        title.textContent = mode === 'delete' ? 'Delete zone' : mode === 'aging' ? 'Zone aging' : 'Create zone';
+        summary.textContent = name ? `${name}` : 'Create or manage a DNS zone.';
+        action.value = mode === 'delete' ? 'delete' : mode === 'aging' ? 'aging' : 'create';
+        zoneName.value = name;
+        agingEnabled.value = aged ? 'off' : 'on';
+        submit.textContent = mode === 'delete' ? 'Delete zone' : mode === 'aging' ? (aged ? 'Disable aging' : 'Enable aging') : 'Create zone';
+        hide(createFields, mode !== 'create');
+        hide(manageFields, mode === 'create');
+        hide(deleteFields, mode !== 'delete');
+        hide(manageHelp, mode !== 'aging');
+        if (mode === 'aging') {
+          manageHelp.textContent = `${name} currently has aging ${aged ? 'enabled' : 'disabled'}.`;
+        }
+        if (mode === 'create') {
+          zoneType.value = payload.zoneType || 'primary';
+          replicationScope.value = payload.replicationScope || 'Forest';
+          zoneNameInput.value = payload.zoneName || '';
+          reverseNetwork.value = payload.reverseNetwork || '';
+          masterServers.value = payload.masterServers || '';
+          zoneFile.value = payload.zoneFile || '';
+        }
+        modal.showModal();
+      }
+
+      window.openZoneModal = openZoneModal;
+      document.addEventListener('click', (event) => {
+        const trigger = event.target.closest('[data-zone-modal]');
+        if (trigger) {
+          openZoneModal(trigger.dataset.zoneModal, trigger.dataset);
+          return;
+        }
+        if (event.target.closest('[data-zone-modal-close]')) {
+          modal.close();
+        }
+      });
+
+      document.querySelectorAll('[data-zone-age-toggle]').forEach((button) => {
+        button.addEventListener('click', () => openZoneModal('aging', button.dataset));
+      });
+      document.querySelectorAll('[data-zone-delete]').forEach((button) => {
+        button.addEventListener('click', () => openZoneModal('delete', button.dataset));
+      });
+      form.addEventListener('submit', () => {
+        if (action.value === 'create') {
+          zoneName.value = zoneNameInput.value;
+        }
+      });
+    })();
+  </script>
+{% endblock %}

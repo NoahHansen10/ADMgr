@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="split">
+  <div class="card">
+    <h2>Delegations</h2>
+    <p>View and manage child-zone delegations inside a parent zone.</p>
+
+    <form method="get" class="form-grid">
+      <div>
+        <label for="zone">Parent zone</label>
+        <input id="zone" name="zone" value="{{ zone }}" placeholder="contoso.com">
+      </div>
+      <div class="form-actions">
+        <button type="submit">Load zone</button>
+        <a class="button secondary" href="/delegations">Reset</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>Add delegation</h3>
+    <div class="form-actions">
+      {% if can_manage %}
+        <button type="button" class="button" data-delegation-modal="add" data-parent-zone="{{ zone }}">Add delegation</button>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<section class="card">
+  <div class="form-actions" style="justify-content:space-between; margin-bottom: 14px;">
+    <div>
+      <h2 style="margin-bottom:4px;">Delegations in {{ zone }}</h2>
+      <p class="helper">{{ delegation_rows|length }} delegation{{ '' if delegation_rows|length == 1 else 's' }} found.</p>
+    </div>
+  </div>
+
+  {% if delegation_rows %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Child zone</th>
+            <th>Name server</th>
+            <th>IP address</th>
+            {% if can_manage %}<th>Actions</th>{% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for delegation in delegation_rows %}
+            <tr>
+              <td class="mono">{{ delegation.child }}</td>
+              <td class="mono">{{ delegation.ns }}</td>
+              <td class="mono">{{ delegation.ip }}</td>
+              {% if can_manage %}
+                <td>
+                  <div class="record-actions">
+                    <button type="button" class="icon-button secondary" data-delegation-modal="manage" data-parent-zone="{{ zone }}" data-child-zone="{{ delegation.child }}" data-name-server="{{ delegation.ns }}" data-ip-address="{{ delegation.ip }}">⚙</button>
+                    <button type="button" class="icon-button danger" data-delegation-modal="remove" data-parent-zone="{{ zone }}" data-child-zone="{{ delegation.child }}">-</button>
+                  </div>
+                </td>
+              {% endif %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state">No delegations were found for this zone.</div>
+  {% endif %}
+</section>
+
+{% if can_manage %}
+<dialog id="delegationModal" class="record-dialog" aria-labelledby="delegationModalTitle">
+  <div class="record-dialog-panel">
+    <div class="record-dialog-header">
+      <div>
+        <div class="eyebrow">DNS delegation</div>
+        <h3 id="delegationModalTitle" class="record-dialog-title">Delegation action</h3>
+      </div>
+      <button type="button" class="secondary" data-delegation-modal-close>Close</button>
+    </div>
+    <p id="delegationModalSummary" class="record-dialog-summary"></p>
+    <form method="post" action="/delegations" id="delegationModalForm" class="form-grid">
+      <input type="hidden" name="action" id="delegationModalAction">
+      <div class="form-row">
+        <div>
+          <label for="delegationModalParentZone">Parent zone</label>
+          <input id="delegationModalParentZone" name="parent_zone" value="{{ zone }}">
+        </div>
+        <div>
+          <label for="delegationModalChildZone">Child zone</label>
+          <input id="delegationModalChildZone" name="child_zone" placeholder="west01">
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label for="delegationModalNameServer">Name server</label>
+          <input id="delegationModalNameServer" name="name_server" placeholder="ns1.west01.contoso.com">
+        </div>
+        <div>
+          <label for="delegationModalIpAddress">IP address</label>
+          <input id="delegationModalIpAddress" name="ip_address" placeholder="10.0.0.25">
+        </div>
+      </div>
+      <div class="form-actions" style="justify-content:flex-end;">
+        <button type="button" class="secondary" data-delegation-modal-close>Cancel</button>
+        <button type="submit" id="delegationModalSubmit">Save</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+{% endif %}
+
+{% block page_scripts %}
+{% if can_manage %}
+<script>
+  (() => {
+    const modal = document.getElementById('delegationModal');
+    const title = document.getElementById('delegationModalTitle');
+    const summary = document.getElementById('delegationModalSummary');
+    const form = document.getElementById('delegationModalForm');
+    const action = document.getElementById('delegationModalAction');
+    const parentZone = document.getElementById('delegationModalParentZone');
+    const childZone = document.getElementById('delegationModalChildZone');
+    const nameServer = document.getElementById('delegationModalNameServer');
+    const ipAddress = document.getElementById('delegationModalIpAddress');
+    const submit = document.getElementById('delegationModalSubmit');
+
+    function openDelegationModal(mode, payload = {}) {
+      const actionValue = mode === 'remove' ? 'remove' : 'add';
+      title.textContent = actionValue === 'remove' ? 'Remove delegation' : (mode === 'manage' ? 'Update delegation' : 'Add delegation');
+      summary.textContent = payload.childZone ? `Child zone ${payload.childZone}` : `Delegations in ${payload.parentZone || parentZone.value}`;
+      action.value = actionValue;
+      parentZone.value = payload.parentZone || parentZone.value;
+      childZone.value = payload.childZone || '';
+      nameServer.value = payload.nameServer || '';
+      ipAddress.value = payload.ipAddress || '';
+      submit.textContent = actionValue === 'remove' ? 'Remove delegation' : 'Add delegation';
+      modal.showModal();
+      childZone.focus();
+    }
+
+    window.openDelegationModal = openDelegationModal;
+    document.addEventListener('click', (event) => {
+      const trigger = event.target.closest('[data-delegation-modal]');
+      if (trigger) {
+        openDelegationModal(trigger.dataset.delegationModal, trigger.dataset);
+        return;
+      }
+      if (event.target.closest('[data-delegation-modal-close]')) {
+        modal.close();
+      }
+    });
+  })();
+</script>
+{% endif %}
+{% endblock %}
+{% endblock %}

@@ -1,0 +1,1229 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero" id="identity-overview">
+  <div>
+    <span class="chip">Connected to {{ server }}</span>
+    <h1>Directory control plane</h1>
+    <p>Users, groups, and membership actions live in the same console style as DNS, with selected objects shown in a single inspector pane.</p>
+  </div>
+
+  <div class="hero-rail">
+    <div class="kpi-grid">
+      <div class="kpi">
+        <span class="label">Users</span>
+        <div class="value mono">{{ users|length }}</div>
+      </div>
+      <div class="kpi">
+        <span class="label">Groups</span>
+        <div class="value mono">{{ groups|length }}</div>
+      </div>
+      <div class="kpi">
+        <span class="label">Role</span>
+        <div class="value">{{ "Manage" if can_manage else "Read-only" }}</div>
+      </div>
+      <div class="kpi">
+        <span class="label">Domain</span>
+        <div class="value mono">{{ zone }}</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="card" id="identity-tree">
+  <div class="form-actions" style="justify-content:space-between; margin-bottom: 14px;">
+    <div>
+      <h2 style="margin-bottom:4px;">Identity explorer</h2>
+      <p class="helper">Search, inspect, and manage users and groups from one nested workspace.</p>
+    </div>
+    {% if can_manage %}
+      <div class="form-actions">
+        <button type="button" class="button" data-identity-action="user-create">+ User</button>
+        <button type="button" class="button" data-identity-action="group-create">+ Group</button>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="identity-layout">
+    <div class="stack">
+      <div class="card identity-list-card">
+        <div class="identity-tabs">
+          <button type="button" class="identity-tab active" data-identity-tab="users">Users</button>
+          <button type="button" class="identity-tab" data-identity-tab="groups">Groups</button>
+        </div>
+
+        <div class="identity-tab-panel" data-identity-panel="users">
+          <h2>Users</h2>
+          <p class="helper">Search by name or samAccountName, then pick a user to inspect or edit.</p>
+
+          <form method="get" class="form-grid">
+            <input type="hidden" name="group_search" value="{{ group_search }}">
+            <div>
+              <label for="user_search">Search users</label>
+              <input id="user_search" name="user_search" value="{{ user_search }}" placeholder="jdoe, alice, finance">
+            </div>
+            <div class="form-actions">
+              <button type="submit">Search</button>
+              <a class="button secondary" href="{{ url_for('identity') }}">Reset</a>
+            </div>
+          </form>
+
+          {% if users %}
+            <div class="table-wrap" style="margin-top:14px;">
+              <table data-sortable-table>
+                <thead>
+                  <tr>
+                    <th><button type="button" class="sort-header" data-sort-key="name">Name</button></th>
+                    <th><button type="button" class="sort-header" data-sort-key="sam">SamAccountName</button></th>
+                    <th><button type="button" class="sort-header" data-sort-key="enabled">Enabled</button></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in users %}
+                    <tr class="selectable-row" data-user-select data-user-sam="{{ item.sam_account_name }}" tabindex="0" role="button">
+                      <td data-sort-key="name" data-sort-value="{{ item.name }}">{{ item.name }}</td>
+                      <td class="mono" data-sort-key="sam" data-sort-value="{{ item.sam_account_name }}">{{ item.sam_account_name }}</td>
+                      <td data-sort-key="enabled" data-sort-value="{{ 1 if item.enabled else 0 }}">{{ "Yes" if item.enabled else "No" }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div class="empty-state">No users matched your search.</div>
+          {% endif %}
+        </div>
+
+        <div class="identity-tab-panel" data-identity-panel="groups" hidden>
+          <h2>Groups</h2>
+          <p class="helper">Search groups independently and use this list as the starting point for membership management.</p>
+
+          <form method="get" class="form-grid">
+            <input type="hidden" name="user_search" value="{{ user_search }}">
+            <div>
+              <label for="group_search">Search groups</label>
+              <input id="group_search" name="group_search" value="{{ group_search }}" placeholder="DNS-Admins, Helpdesk, Servers">
+            </div>
+            <div class="form-actions">
+              <button type="submit">Search</button>
+              <a class="button secondary" href="{{ url_for('identity') }}">Reset</a>
+            </div>
+          </form>
+
+          {% if groups %}
+            <div class="table-wrap" style="margin-top:14px;">
+              <table data-sortable-table>
+                <thead>
+                  <tr>
+                    <th><button type="button" class="sort-header" data-sort-key="name">Name</button></th>
+                    <th><button type="button" class="sort-header" data-sort-key="sam">SamAccountName</button></th>
+                    <th><button type="button" class="sort-header" data-sort-key="scope">Scope</button></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in groups %}
+                    <tr class="selectable-row" data-group-select data-group-sam="{{ item.sam_account_name }}" tabindex="0" role="button">
+                      <td data-sort-key="name" data-sort-value="{{ item.name }}">{{ item.name }}</td>
+                      <td class="mono" data-sort-key="sam" data-sort-value="{{ item.sam_account_name }}">{{ item.sam_account_name }}</td>
+                      <td data-sort-key="scope" data-sort-value="{{ item.scope }}">{{ item.scope }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div class="empty-state">No groups matched your search.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <aside class="zone-inspector identity-inspector" id="identityInspector">
+      <div class="zone-inspector-shell">
+        <div class="zone-inspector-header">
+          <div>
+            <div class="eyebrow">Selected object</div>
+            <h2 id="identitySelectedTitle" class="zone-inspector-title mono">Choose a user or group</h2>
+            <div id="identitySelectedMeta" class="zone-summary-meta"></div>
+          </div>
+          <div class="form-actions" style="justify-content:flex-end;">
+            <div id="identitySelectedTypePill" class="chip">Nothing selected</div>
+            {% if can_manage %}
+              <button type="button" class="button secondary icon-button" data-identity-action="edit" aria-label="Edit selected object">⚙</button>
+            {% endif %}
+          </div>
+        </div>
+
+        <details class="zone-folder" open>
+          <summary>Details</summary>
+          <div class="zone-folder-body">
+            <div id="identitySelectedDetails" class="stack">
+              <div class="empty-state">Select a user or group from the list to load details.</div>
+            </div>
+          </div>
+        </details>
+
+        <details class="zone-folder">
+          <summary>Membership</summary>
+          <div class="zone-folder-body">
+            <div id="identityMembershipBody" class="stack">
+              <div class="empty-state">Membership data appears here after a selection.</div>
+            </div>
+          </div>
+        </details>
+
+        {% if can_manage %}
+          <details class="zone-folder">
+            <summary>Actions</summary>
+            <div class="zone-folder-body">
+              <div id="identityActionButtons" class="zone-actions"></div>
+            </div>
+          </details>
+
+          <details class="zone-folder">
+            <summary>Attributes</summary>
+            <div class="zone-folder-body">
+              <div class="form-grid">
+                <div>
+                  <label for="identityAttributeSearch">Search attributes</label>
+                  <input id="identityAttributeSearch" placeholder="description, office, extensionAttribute1">
+                </div>
+                <div id="identityAttributesBody" class="stack">
+                  <div class="empty-state">Attribute rows appear here after a selection.</div>
+                </div>
+              </div>
+            </div>
+          </details>
+        {% endif %}
+      </div>
+    </aside>
+  </div>
+</section>
+
+<dialog id="identityModal" class="record-dialog" aria-labelledby="identityModalTitle">
+  <div class="record-dialog-panel">
+    <div class="record-dialog-header">
+      <div>
+        <div class="eyebrow">Active Directory</div>
+        <h3 id="identityModalTitle" class="record-dialog-title">Identity action</h3>
+      </div>
+      <button type="button" class="secondary" data-identity-modal-close>Close</button>
+    </div>
+
+    <p id="identityModalSummary" class="record-dialog-summary"></p>
+
+    <form id="identityModalForm" method="post" action="{{ url_for('identity_actions') }}" class="form-grid">
+      <input type="hidden" name="action" id="identityModalAction">
+      <input type="hidden" name="sam_account_name" id="identityModalSam">
+
+      <div class="record-field-grid" id="identityModalFields">
+        <details class="zone-folder" open data-identity-section="core">
+          <summary>Core fields</summary>
+          <div class="zone-folder-body">
+            <div class="form-row">
+              <div>
+                <label for="identityModalName">Name</label>
+                <input id="identityModalName" name="name" placeholder="Jane Doe">
+              </div>
+              <div>
+                <label for="identityModalSamInput">SamAccountName</label>
+                <input id="identityModalSamInput" name="sam_account_name_input" placeholder="jdoe">
+              </div>
+            </div>
+            <div class="form-row">
+              <div>
+                <label for="identityModalGivenName">Given name</label>
+                <input id="identityModalGivenName" name="given_name" placeholder="Jane">
+              </div>
+              <div>
+                <label for="identityModalSurname">Surname</label>
+                <input id="identityModalSurname" name="surname" placeholder="Doe">
+              </div>
+            </div>
+            <div class="form-row">
+              <div>
+                <label for="identityModalDisplayName">Display name</label>
+                <input id="identityModalDisplayName" name="display_name" placeholder="Jane Doe">
+              </div>
+              <div>
+                <label for="identityModalUpn">UPN</label>
+                <input id="identityModalUpn" name="upn" placeholder="jdoe@ndhansen.com">
+              </div>
+            </div>
+            <div class="form-row">
+              <div>
+                <label for="identityModalEmail">Email</label>
+                <input id="identityModalEmail" name="email" placeholder="jdoe@ndhansen.com">
+              </div>
+              <div>
+                <label for="identityModalPath">OU Path</label>
+                <input id="identityModalPath" name="path" placeholder="OU=Users,DC=local,DC=ndhansen,DC=com">
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <details class="zone-folder" data-identity-section="profile">
+          <summary>Profile fields</summary>
+          <div class="zone-folder-body">
+            <div class="form-row">
+              <div>
+                <label for="identityModalDepartment">Department</label>
+                <input id="identityModalDepartment" name="department" placeholder="IT">
+              </div>
+              <div>
+                <label for="identityModalTitle">Title</label>
+                <input id="identityModalTitleInput" name="title" placeholder="Administrator">
+              </div>
+            </div>
+            <div class="form-row">
+              <div>
+                <label for="identityModalOffice">Office</label>
+                <input id="identityModalOffice" name="office" placeholder="HQ">
+              </div>
+              <div>
+                <label for="identityModalOfficePhone">Office phone</label>
+                <input id="identityModalOfficePhone" name="office_phone" placeholder="555-0100">
+              </div>
+            </div>
+            <div class="form-row">
+              <div>
+                <label for="identityModalMobilePhone">Mobile phone</label>
+                <input id="identityModalMobilePhone" name="mobile_phone" placeholder="555-0101">
+              </div>
+              <div>
+                <label for="identityModalDescription">Description</label>
+                <input id="identityModalDescription" name="description" placeholder="Service account">
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <details class="zone-folder" data-identity-section="password">
+          <summary>Password / enablement</summary>
+          <div class="zone-folder-body">
+            <div class="form-row">
+              <div>
+                <label for="identityModalPassword">Password</label>
+                <input id="identityModalPassword" name="password" type="password" placeholder="Set or reset password">
+              </div>
+              <div>
+                <label for="identityModalEnabled">Enabled</label>
+                <select id="identityModalEnabled" name="enabled">
+                  <option value="true">True</option>
+                  <option value="false">False</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div>
+                <label>
+                  <input type="checkbox" name="force_change" id="identityModalForceChange" checked style="width:auto; margin-right:8px;">
+                  Force password change at next logon
+                </label>
+              </div>
+              <div></div>
+            </div>
+          </div>
+        </details>
+
+        <details class="zone-folder" data-identity-section="group">
+          <summary>Group fields</summary>
+          <div class="zone-folder-body">
+            <div class="form-row">
+              <div>
+                <label for="identityModalGroupName">Group name</label>
+                <input id="identityModalGroupName" name="name" placeholder="Helpdesk Tier 1">
+              </div>
+              <div>
+                <label for="identityModalGroupSam">SamAccountName</label>
+                <input id="identityModalGroupSam" name="sam_account_name_input" placeholder="HelpdeskT1">
+              </div>
+            </div>
+            <div class="form-row">
+              <div>
+                <label for="identityModalGroupScope">Scope</label>
+                <select id="identityModalGroupScope" name="scope">
+                  <option value="Global">Global</option>
+                  <option value="DomainLocal">DomainLocal</option>
+                  <option value="Universal">Universal</option>
+                </select>
+              </div>
+              <div>
+                <label for="identityModalGroupCategory">Category</label>
+                <select id="identityModalGroupCategory" name="category">
+                  <option value="Security">Security</option>
+                  <option value="Distribution">Distribution</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div>
+                <label for="identityModalGroupPath">OU Path</label>
+                <input id="identityModalGroupPath" name="path" placeholder="OU=Groups,DC=local,DC=ndhansen,DC=com">
+              </div>
+              <div>
+                <label for="identityModalGroupDescription">Description</label>
+                <input id="identityModalGroupDescription" name="description" placeholder="Access group">
+              </div>
+            </div>
+            <div>
+              <label for="identityModalMembers">Members or targets</label>
+              <textarea id="identityModalMembers" name="members" rows="4" placeholder="jsmith,adoe or distinguished names separated by commas"></textarea>
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <div class="form-actions" style="justify-content:flex-end;">
+        <button type="button" class="secondary" data-identity-modal-close>Cancel</button>
+        <button id="identityModalSubmit" type="submit">Save</button>
+      </div>
+    </form>
+  </div>
+  </dialog>
+
+<dialog id="attributeModal" class="record-dialog" aria-labelledby="attributeModalTitle">
+  <div class="record-dialog-panel">
+    <div class="record-dialog-header">
+      <div>
+        <div class="eyebrow">Active Directory</div>
+        <h3 id="attributeModalTitle" class="record-dialog-title">Edit attribute</h3>
+      </div>
+      <button type="button" class="secondary" data-attribute-modal-close>Close</button>
+    </div>
+
+    <p id="attributeModalSummary" class="record-dialog-summary"></p>
+
+    <form id="attributeModalForm" method="post" action="{{ url_for('identity_actions') }}" class="form-grid">
+      <input type="hidden" name="action" value="attribute-update">
+      <input type="hidden" name="object_kind" id="attributeModalObjectKind">
+      <input type="hidden" name="sam_account_name" id="attributeModalSam">
+      <input type="hidden" name="distinguished_name" id="attributeModalDn">
+      <input type="hidden" name="attribute" id="attributeModalAttribute">
+
+      <div class="form-row">
+        <div>
+          <label for="attributeModalObjectLabel">Object</label>
+          <input id="attributeModalObjectLabel" disabled>
+        </div>
+        <div>
+          <label for="attributeModalAttributeLabel">Attribute</label>
+          <input id="attributeModalAttributeLabel" disabled>
+        </div>
+      </div>
+
+      <div>
+        <label for="attributeModalValue">Value</label>
+        <textarea id="attributeModalValue" name="value" rows="5" placeholder="Enter a new value"></textarea>
+      </div>
+
+      <div class="form-actions" style="justify-content:flex-end;">
+        <button type="button" class="secondary" data-attribute-modal-close>Cancel</button>
+        <button type="submit">Save attribute</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+{% endblock %}
+
+{% block page_scripts %}
+<script>
+(() => {
+  const modal = document.getElementById('identityModal');
+  const form = document.getElementById('identityModalForm');
+  if (!modal || !form) {
+    return;
+  }
+
+  const can_manage = {{ 'true' if can_manage else 'false' }};
+
+  const title = document.getElementById('identityModalTitle');
+  const summary = document.getElementById('identityModalSummary');
+  const actionInput = document.getElementById('identityModalAction');
+  const samInput = document.getElementById('identityModalSam');
+  const submit = document.getElementById('identityModalSubmit');
+  const selectedTitle = document.getElementById('identitySelectedTitle');
+  const selectedMeta = document.getElementById('identitySelectedMeta');
+  const selectedDetails = document.getElementById('identitySelectedDetails');
+  const membershipBody = document.getElementById('identityMembershipBody');
+  const actionButtons = document.getElementById('identityActionButtons');
+  const selectedTypePill = document.getElementById('identitySelectedTypePill');
+  const attributesBody = document.getElementById('identityAttributesBody');
+  const attributeSearch = document.getElementById('identityAttributeSearch');
+  const attributeModal = document.getElementById('attributeModal');
+  const attributeModalForm = document.getElementById('attributeModalForm');
+  const attributeModalTitle = document.getElementById('attributeModalTitle');
+  const attributeModalSummary = document.getElementById('attributeModalSummary');
+  const attributeModalObjectKind = document.getElementById('attributeModalObjectKind');
+  const attributeModalSam = document.getElementById('attributeModalSam');
+  const attributeModalDn = document.getElementById('attributeModalDn');
+  const attributeModalAttribute = document.getElementById('attributeModalAttribute');
+  const attributeModalValue = document.getElementById('attributeModalValue');
+  const attributeModalObjectLabel = document.getElementById('attributeModalObjectLabel');
+  const attributeModalAttributeLabel = document.getElementById('attributeModalAttributeLabel');
+  const identityTabs = Array.from(document.querySelectorAll('[data-identity-tab]'));
+  const identityPanels = Array.from(document.querySelectorAll('[data-identity-panel]'));
+  const selectedRows = { user: null, group: null };
+  let activeIdentityTab = 'users';
+  let selectionRequestId = 0;
+  let membershipSearchTimer = null;
+  let attributeFilter = '';
+  let membershipResults = [];
+  let selectedMembership = new Set();
+  let currentObjectKind = null;
+  let currentObjectData = null;
+  const usersBySam = new Map(({{ users|tojson }} || []).map((item) => [String(item.sam_account_name || '').toLowerCase(), item]));
+  const groupsBySam = new Map(({{ groups|tojson }} || []).map((item) => [String(item.sam_account_name || '').toLowerCase(), item]));
+
+  const fields = {
+    name: document.getElementById('identityModalName'),
+    sam: document.getElementById('identityModalSamInput'),
+    givenName: document.getElementById('identityModalGivenName'),
+    surname: document.getElementById('identityModalSurname'),
+    displayName: document.getElementById('identityModalDisplayName'),
+    upn: document.getElementById('identityModalUpn'),
+    email: document.getElementById('identityModalEmail'),
+    path: document.getElementById('identityModalPath'),
+    department: document.getElementById('identityModalDepartment'),
+    titleInput: document.getElementById('identityModalTitleInput'),
+    office: document.getElementById('identityModalOffice'),
+    officePhone: document.getElementById('identityModalOfficePhone'),
+    mobilePhone: document.getElementById('identityModalMobilePhone'),
+    description: document.getElementById('identityModalDescription'),
+    password: document.getElementById('identityModalPassword'),
+    enabled: document.getElementById('identityModalEnabled'),
+    forceChange: document.getElementById('identityModalForceChange'),
+    groupName: document.getElementById('identityModalGroupName'),
+    groupSam: document.getElementById('identityModalGroupSam'),
+    groupScope: document.getElementById('identityModalGroupScope'),
+    groupCategory: document.getElementById('identityModalGroupCategory'),
+    groupPath: document.getElementById('identityModalGroupPath'),
+    groupDescription: document.getElementById('identityModalGroupDescription'),
+    members: document.getElementById('identityModalMembers'),
+  };
+
+  const detailFieldOrder = {
+    user: [
+      { key: 'name', label: 'Name' },
+      { key: 'sam_account_name', label: 'SamAccountName' },
+      { key: 'user_principal_name', label: 'UPN' },
+      { key: 'enabled', label: 'Enabled' },
+      { key: 'locked_out', label: 'Locked' },
+      { key: 'email', label: 'Email' },
+      { key: 'department', label: 'Department' },
+      { key: 'title', label: 'Title' },
+      { key: 'description', label: 'Description' },
+      { key: 'office', label: 'Office' },
+      { key: 'office_phone', label: 'Office phone' },
+      { key: 'mobile_phone', label: 'Mobile phone' },
+      { key: 'manager', label: 'Manager' },
+      { key: 'password_last_set', label: 'Password last set' },
+      { key: 'last_logon_date', label: 'Last logon' },
+      { key: 'password_never_expires', label: 'Password never expires' },
+      { key: 'distinguished_name', label: 'Distinguished name' },
+    ],
+    group: [
+      { key: 'name', label: 'Name' },
+      { key: 'sam_account_name', label: 'SamAccountName' },
+      { key: 'group_scope', label: 'Scope' },
+      { key: 'group_category', label: 'Category' },
+      { key: 'description', label: 'Description' },
+      { key: 'managed_by', label: 'Managed by' },
+      { key: 'distinguished_name', label: 'Distinguished name' },
+    ],
+  };
+
+  const editableSummaryFields = new Set([
+    'name',
+    'sam_account_name',
+    'user_principal_name',
+    'enabled',
+    'email',
+    'department',
+    'title',
+    'description',
+    'office',
+    'office_phone',
+    'mobile_phone',
+    'manager',
+    'group_scope',
+    'group_category',
+    'managed_by',
+  ]);
+
+  const sections = {
+    core: modal.querySelector('[data-identity-section="core"]'),
+    profile: modal.querySelector('[data-identity-section="profile"]'),
+    password: modal.querySelector('[data-identity-section="password"]'),
+    group: modal.querySelector('[data-identity-section="group"]'),
+  };
+
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+  }
+
+  function humanizeKey(key) {
+    return String(key || '')
+      .replaceAll('_', ' ')
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/\b\w/g, (ch) => ch.toUpperCase());
+  }
+
+  function formatValue(value) {
+    if (value === null || value === undefined || value === '') return '';
+    if (Array.isArray(value)) {
+      return value.map((item) => formatValue(item)).filter(Boolean).join('\n');
+    }
+    if (typeof value === 'object') {
+      return JSON.stringify(value, null, 2);
+    }
+    return String(value);
+  }
+
+  function isTrueLike(value) {
+    return String(value).trim().toLowerCase() === 'true' || String(value).trim() === '1' || String(value).trim().toLowerCase() === 'yes';
+  }
+
+  function getDetailValue(data, key) {
+    return data?.[key] ?? data?.[key.replaceAll('_', '')] ?? '';
+  }
+
+  function canEditDetailKey(key) {
+    return editableSummaryFields.has(key);
+  }
+
+  function setVisible(section, visible) {
+    if (!section) return;
+    section.hidden = !visible;
+  }
+
+  function setIdentityTab(tabName) {
+    activeIdentityTab = tabName === 'groups' ? 'groups' : 'users';
+    identityTabs.forEach((tab) => {
+      tab.classList.toggle('active', tab.dataset.identityTab === activeIdentityTab);
+      tab.setAttribute('aria-selected', String(tab.dataset.identityTab === activeIdentityTab));
+    });
+    identityPanels.forEach((panel) => {
+      const isActive = panel.dataset.identityPanel === activeIdentityTab;
+      panel.hidden = !isActive;
+      panel.style.display = isActive ? 'grid' : 'none';
+      panel.setAttribute('aria-hidden', String(!isActive));
+    });
+  }
+
+  function selectCurrentTab(kind) {
+    setIdentityTab(kind === 'group' ? 'groups' : 'users');
+  }
+
+  function renderActionButtons(kind, data) {
+    if (!actionButtons) return;
+    if (kind === 'user') {
+      const enabled = String(data.enabled).toLowerCase() === 'true';
+      actionButtons.innerHTML = `
+        <button type="button" class="button" data-identity-action="edit">⚙ Edit</button>
+        <button type="button" class="button secondary" data-identity-action="${enabled ? 'disable' : 'enable'}">${enabled ? 'Disable' : 'Enable'}</button>
+        <button type="button" class="button secondary" data-identity-action="reset-password">Reset password</button>
+        <button type="button" class="button danger" data-identity-action="delete">Delete</button>
+      `;
+      return;
+    }
+    actionButtons.innerHTML = `
+      <button type="button" class="button" data-identity-action="edit">⚙ Edit</button>
+      <button type="button" class="button secondary" data-identity-action="group-add-member">+ Members</button>
+      <button type="button" class="button secondary" data-identity-action="group-remove-member">- Members</button>
+      <button type="button" class="button danger" data-identity-action="group-delete">Delete</button>
+    `;
+  }
+
+  function renderDetailRows(kind, data) {
+    const rows = detailFieldOrder[kind] || [];
+    if (!selectedDetails) return;
+    if (!rows.length) {
+      selectedDetails.innerHTML = '<div class="empty-state">No details available.</div>';
+      return;
+    }
+
+    selectedDetails.innerHTML = `
+      <div class="attribute-grid">
+        ${rows.map((field) => {
+          const rawValue = getDetailValue(data, field.key);
+          const valueText = field.key === 'enabled' || field.key === 'locked_out' || field.key === 'password_never_expires'
+            ? (isTrueLike(rawValue) ? 'True' : 'False')
+            : formatValue(rawValue);
+          const editable = canEditDetailKey(field.key);
+          return `
+            <div class="attribute-row">
+              <div class="attribute-label">${escapeHtml(field.label)}</div>
+              <div class="attribute-value mono">${escapeHtml(valueText || '—')}</div>
+              <div class="attribute-actions">
+                ${editable && can_manage ? `<button type="button" class="icon-button secondary" data-detail-edit="${escapeHtml(field.key)}">⚙</button>` : ''}
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  function renderMembershipPanel(kind, data) {
+    if (!membershipBody) return;
+    const items = kind === 'user' ? (data.member_of || []) : (data.members || []);
+    const searchPlaceholder = kind === 'user' ? 'Search groups to add or remove' : 'Search users to add or remove';
+    const searchLabel = kind === 'user' ? 'Search groups' : 'Search users';
+    const searchButtonAdd = kind === 'user' ? 'Add to groups' : 'Add members';
+    const searchButtonRemove = kind === 'user' ? 'Remove from groups' : 'Remove members';
+    const searchKind = kind === 'user' ? 'groups' : 'users';
+
+    membershipBody.innerHTML = `
+      <div class="stack">
+        <div>
+          <label>${kind === 'user' ? 'Current group memberships' : 'Current members'}</label>
+          <div class="chip-cloud" id="identityCurrentMemberships">
+            ${(items || []).length ? (items || []).map((item) => {
+              const chipValue = typeof item === 'string'
+                ? item
+                : (item?.name || item?.sam_account_name || item?.distinguished_name || formatValue(item));
+              return `<button type="button" class="chip chip-button" data-membership-chip="${escapeHtml(chipValue)}">${escapeHtml(chipValue)}</button>`;
+            }).join('') : '<div class="empty-state">No memberships found.</div>'}
+          </div>
+        </div>
+        <div>
+          <label for="identityMembershipSearch">${searchLabel}</label>
+          <input id="identityMembershipSearch" placeholder="${escapeHtml(searchPlaceholder)}" value="">
+        </div>
+        <div class="form-actions">
+          <button type="button" class="secondary" data-membership-action="search">Search</button>
+          <button type="button" class="secondary" data-membership-action="clear">Clear selection</button>
+          <button type="button" data-membership-action="add">${escapeHtml(searchButtonAdd)}</button>
+          <button type="button" class="danger" data-membership-action="remove">${escapeHtml(searchButtonRemove)}</button>
+        </div>
+        <div class="table-wrap compact">
+          <table class="compact" data-membership-results data-membership-kind="${searchKind}">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>SamAccountName</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${membershipResults.length ? membershipResults.map((item) => `
+                <tr class="selectable-row${selectedMembership.has(String(item.sam_account_name || '').toLowerCase()) ? ' active' : ''}" data-membership-select data-membership-sam="${escapeHtml(item.sam_account_name || '')}">
+                  <td>${escapeHtml(item.name || '')}</td>
+                  <td class="mono">${escapeHtml(item.sam_account_name || '')}</td>
+                  <td>${escapeHtml(item.enabled !== undefined ? (item.enabled ? 'Yes' : 'No') : (item.scope || item.group_scope || ''))}</td>
+                </tr>
+              `).join('') : '<tr><td colspan="3" class="empty-state">Search to find candidates.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+
+    const searchInput = membershipBody.querySelector('#identityMembershipSearch');
+    if (searchInput) {
+      searchInput.addEventListener('input', () => {
+        window.clearTimeout(membershipSearchTimer);
+        membershipSearchTimer = window.setTimeout(() => {
+          runMembershipSearch(kind, searchInput.value);
+        }, 220);
+      });
+      searchInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          runMembershipSearch(kind, searchInput.value);
+        }
+      });
+    }
+
+    membershipBody.querySelectorAll('[data-membership-select]').forEach((row) => {
+      row.addEventListener('click', () => {
+        const sam = String(row.dataset.membershipSam || '').toLowerCase();
+        if (selectedMembership.has(sam)) {
+          selectedMembership.delete(sam);
+        } else {
+          selectedMembership.add(sam);
+        }
+        renderMembershipPanel(kind, currentObjectData || data);
+      });
+    });
+
+    membershipBody.querySelectorAll('[data-membership-chip]').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        const sam = String(chip.dataset.membershipChip || '').toLowerCase();
+        if (selectedMembership.has(sam)) {
+          selectedMembership.delete(sam);
+        } else {
+          selectedMembership.add(sam);
+        }
+        renderMembershipPanel(kind, currentObjectData || data);
+      });
+    });
+
+    membershipBody.querySelectorAll('[data-membership-action="search"]').forEach((button) => {
+      button.addEventListener('click', () => runMembershipSearch(kind, searchInput?.value || ''));
+    });
+    membershipBody.querySelectorAll('[data-membership-action="clear"]').forEach((button) => {
+      button.addEventListener('click', () => {
+        selectedMembership = new Set();
+        renderMembershipPanel(kind, currentObjectData || data);
+      });
+    });
+    membershipBody.querySelectorAll('[data-membership-action="add"]').forEach((button) => {
+      button.addEventListener('click', () => submitMembershipAction(kind, 'add'));
+    });
+    membershipBody.querySelectorAll('[data-membership-action="remove"]').forEach((button) => {
+      button.addEventListener('click', () => submitMembershipAction(kind, 'remove'));
+    });
+  }
+
+  function renderAttributesPanel(kind, data) {
+    if (!attributesBody) return;
+    const valueRows = Array.isArray(data.attributes) ? data.attributes : [];
+    const schemaAttrs = Array.isArray(data.schema_attributes) ? data.schema_attributes : [];
+    const valueMap = new Map(valueRows.map((item) => [String(item.key || '').toLowerCase(), item]));
+    const rows = [];
+
+    schemaAttrs.forEach((attr) => {
+      const key = String(attr || '').trim();
+      if (!key) return;
+      const existing = valueMap.get(key.toLowerCase());
+      rows.push(existing || {
+        key,
+        raw_key: key,
+        label: humanizeKey(key),
+        value: '',
+        editable: !['member_of', 'members', 'distinguished_name', 'enabled', 'locked_out', 'password_last_set', 'last_logon_date', 'password_never_expires'].includes(key),
+        multivalue: false,
+      });
+      valueMap.delete(key.toLowerCase());
+    });
+
+    valueRows.forEach((item) => {
+      const key = String(item.key || '').toLowerCase();
+      if (!valueMap.has(key)) return;
+      rows.push(item);
+      valueMap.delete(key);
+    });
+
+    const filteredRows = rows.filter((item) => {
+      if (!attributeFilter) return true;
+      const needle = attributeFilter.toLowerCase();
+      return String(item.key || '').toLowerCase().includes(needle) || String(item.label || '').toLowerCase().includes(needle) || String(item.value || '').toLowerCase().includes(needle);
+    });
+    attributesBody.innerHTML = `
+      <div class="stack">
+        <div class="table-wrap compact">
+          <table class="compact">
+            <thead>
+              <tr>
+                <th>Attribute</th>
+                <th>Value</th>
+                <th>State</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filteredRows.length ? filteredRows.map((item) => `
+                <tr>
+                  <td>${escapeHtml(item.label || humanizeKey(item.key))}</td>
+                  <td class="mono value-cell">${escapeHtml(item.value || '—')}</td>
+                  <td>
+                    <div class="form-actions" style="justify-content:flex-start;">
+                      <span class="chip">${item.editable ? 'Writable' : 'Read only'}</span>
+                      ${item.editable && can_manage ? `<button type="button" class="icon-button secondary" data-attribute-edit="${escapeHtml(item.raw_key || item.key)}" data-attribute-value="${escapeHtml(item.value || '')}">⚙</button>` : ''}
+                    </div>
+                  </td>
+                </tr>
+              `).join('') : '<tr><td colspan="3" class="empty-state">No attributes match this filter.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+
+  function openAttributeEditor(kind, data, attributeKey, value) {
+    if (!attributeModal || !attributeModalForm) return;
+    attributeModalObjectKind.value = kind;
+    attributeModalSam.value = data.sam_account_name || '';
+    attributeModalDn.value = data.distinguished_name || '';
+    attributeModalAttribute.value = attributeKey || '';
+    attributeModalTitle.textContent = 'Edit attribute';
+    attributeModalSummary.textContent = `Update ${data.name || data.sam_account_name || kind} · ${humanizeKey(attributeKey)}`;
+    attributeModalObjectLabel.value = `${kind}: ${data.name || data.sam_account_name || ''}`;
+    attributeModalAttributeLabel.value = humanizeKey(attributeKey);
+    attributeModalValue.value = formatValue(value);
+    attributeModal.showModal();
+  }
+
+  function submitMembershipAction(kind, action) {
+    if (!currentObjectData) return;
+    const selected = Array.from(selectedMembership);
+    if (!selected.length) return;
+    const tempForm = document.createElement('form');
+    tempForm.method = 'post';
+    tempForm.action = "{{ url_for('identity_actions') }}";
+    const actionField = document.createElement('input');
+    actionField.type = 'hidden';
+    actionField.name = 'action';
+    actionField.value = kind === 'user' ? (action === 'add' ? 'user-add-group' : 'user-remove-group') : (action === 'add' ? 'group-add-member' : 'group-remove-member');
+    const samField = document.createElement('input');
+    samField.type = 'hidden';
+    samField.name = 'sam_account_name';
+    samField.value = currentObjectData.sam_account_name || '';
+    const membersField = document.createElement('input');
+    membersField.type = 'hidden';
+    membersField.name = 'members';
+    membersField.value = selected.join(',');
+    tempForm.append(actionField, samField, membersField);
+    document.body.appendChild(tempForm);
+    tempForm.submit();
+  }
+
+  async function runMembershipSearch(kind, query) {
+    const q = String(query || '').trim();
+    const endpoint = kind === 'user' ? '/api/ad/search/groups' : '/api/ad/search/users';
+    const key = kind === 'user' ? 'groups' : 'users';
+    try {
+      const response = await fetch(`${endpoint}?q=${encodeURIComponent(q)}`, { headers: { Accept: 'application/json' } });
+      const payload = await response.json();
+      membershipResults = Array.isArray(payload[key]) ? payload[key] : [];
+      renderMembershipPanel(kind, currentObjectData || {});
+    } catch {
+      membershipResults = [];
+      renderMembershipPanel(kind, currentObjectData || {});
+    }
+  }
+
+  function setSelected(kind, data) {
+    selectCurrentTab(kind);
+    currentObjectKind = kind;
+    currentObjectData = data;
+    selectedMembership = new Set();
+    membershipResults = [];
+    attributeFilter = attributeSearch?.value?.trim() || '';
+    if (kind === 'user') {
+      selectedRows.group = null;
+    } else {
+      selectedRows.user = null;
+    }
+    selectedRows[kind] = data;
+    const label = kind === 'user' ? data.name || data.sam_account_name : data.name || data.sam_account_name;
+    selectedTitle.textContent = label || `Select a ${kind}`;
+    if (selectedTypePill) {
+      selectedTypePill.textContent = kind === 'user' ? 'User' : 'Group';
+    }
+    selectedMeta.innerHTML = `
+      <span>Kind: ${escapeHtml(kind)}</span>
+      <span>Scope: ${escapeHtml(data.scope || data.group_scope || data.category || data.group_category || '')}</span>
+    `;
+
+    renderDetailRows(kind, data);
+    renderMembershipPanel(kind, data);
+    renderAttributesPanel(kind, data);
+    if (can_manage) {
+      runMembershipSearch(kind, '');
+    }
+
+    document.querySelectorAll('[data-user-select], [data-group-select]').forEach((row) => {
+      row.classList.toggle('active', (kind === 'user' && row.dataset.userSam === data.sam_account_name) || (kind === 'group' && row.dataset.groupSam === data.sam_account_name));
+    });
+
+    renderActionButtons(kind, data);
+  }
+
+  function updateSelectionFromData(kind, data) {
+    if (!data) return;
+    setSelected(kind, data);
+    if (kind === 'user') {
+      populateUser(data);
+    } else {
+      populateGroup(data);
+    }
+  }
+
+  function populateUser(data) {
+    fields.name.value = data.name || '';
+    fields.sam.value = data.sam_account_name || '';
+    fields.givenName.value = data.given_name || '';
+    fields.surname.value = data.surname || '';
+    fields.displayName.value = data.display_name || data.name || '';
+    fields.upn.value = data.user_principal_name || '';
+    fields.email.value = data.email || '';
+    fields.department.value = data.department || '';
+    fields.titleInput.value = data.title || '';
+    fields.office.value = data.office || '';
+    fields.officePhone.value = data.office_phone || '';
+    fields.mobilePhone.value = data.mobile_phone || '';
+    fields.description.value = data.description || '';
+    fields.path.value = data.path || '';
+    fields.enabled.value = String(data.enabled ?? true);
+    fields.forceChange.checked = true;
+    fields.password.value = '';
+  }
+
+  function populateGroup(data) {
+    fields.groupName.value = data.name || '';
+    fields.groupSam.value = data.sam_account_name || '';
+    fields.groupScope.value = data.scope || data.group_scope || 'Global';
+    fields.groupCategory.value = data.category || data.group_category || 'Security';
+    fields.groupPath.value = data.path || '';
+    fields.groupDescription.value = data.description || '';
+    fields.members.value = '';
+  }
+
+  function setMode(action, kind, data = {}) {
+    const resolvedAction = action === 'edit'
+      ? (kind === 'user' ? 'user-update' : 'group-update')
+      : action === 'membership'
+        ? 'group-add-member'
+        : action === 'reset-password'
+          ? 'user-reset-password'
+        : action;
+    actionInput.value = resolvedAction;
+    samInput.value = data.sam_account_name || data.sam || '';
+
+    setVisible(sections.core, true);
+    setVisible(sections.profile, kind === 'user' && !['delete', 'enable', 'disable', 'reset-password', 'membership'].includes(action));
+    setVisible(sections.password, kind === 'user' && ['user-create', 'user-update', 'user-reset-password'].includes(resolvedAction));
+    setVisible(sections.group, kind === 'group' || action.startsWith('group-'));
+
+    if (kind === 'user') {
+      populateUser(data);
+      fields.groupName.value = '';
+      fields.groupSam.value = '';
+      fields.members.value = '';
+      if (resolvedAction === 'user-create') {
+        title.textContent = 'Create user';
+        summary.textContent = 'Create a new AD user.';
+        submit.textContent = 'Create user';
+      } else if (resolvedAction === 'user-update') {
+        title.textContent = 'Edit user';
+        summary.textContent = `Edit ${data.name || data.sam_account_name || 'user'}.`;
+        submit.textContent = 'Save changes';
+      } else if (resolvedAction === 'user-reset-password') {
+        title.textContent = 'Reset password';
+        summary.textContent = `Reset password for ${data.name || data.sam_account_name || 'user'}.`;
+        submit.textContent = 'Reset password';
+        setVisible(sections.profile, false);
+        setVisible(sections.password, true);
+      } else if (resolvedAction === 'enable' || resolvedAction === 'disable') {
+        title.textContent = resolvedAction === 'enable' ? 'Enable user' : 'Disable user';
+        summary.textContent = `${resolvedAction === 'enable' ? 'Enable' : 'Disable'} ${data.name || data.sam_account_name || 'user'}.`;
+        submit.textContent = resolvedAction === 'enable' ? 'Enable' : 'Disable';
+        setVisible(sections.profile, false);
+        setVisible(sections.password, false);
+      } else if (resolvedAction === 'delete') {
+        title.textContent = 'Delete user';
+        summary.textContent = `Delete ${data.name || data.sam_account_name || 'user'}?`;
+        submit.textContent = 'Delete user';
+        setVisible(sections.profile, false);
+        setVisible(sections.password, false);
+      }
+    } else {
+      populateGroup(data);
+      fields.name.value = data.name || '';
+      fields.sam.value = data.sam_account_name || '';
+      if (resolvedAction === 'group-create') {
+        title.textContent = 'Create group';
+        summary.textContent = 'Create a new AD group.';
+        submit.textContent = 'Create group';
+      } else if (resolvedAction === 'group-update') {
+        title.textContent = 'Edit group';
+        summary.textContent = `Edit ${data.name || data.sam_account_name || 'group'}.`;
+        submit.textContent = 'Save changes';
+      } else if (resolvedAction === 'group-delete') {
+        title.textContent = 'Delete group';
+        summary.textContent = `Delete ${data.name || data.sam_account_name || 'group'}?`;
+        submit.textContent = 'Delete group';
+        setVisible(sections.profile, false);
+        setVisible(sections.password, false);
+        setVisible(sections.group, false);
+      } else if (resolvedAction === 'group-add-member' || resolvedAction === 'group-remove-member') {
+        title.textContent = resolvedAction === 'group-remove-member' ? 'Remove members' : 'Manage membership';
+        summary.textContent = `Update membership for ${data.name || data.sam_account_name || 'group'}.`;
+        submit.textContent = resolvedAction === 'group-remove-member' ? 'Remove members' : 'Add members';
+      }
+      setVisible(sections.password, false);
+    }
+
+    modal.showModal();
+  }
+
+  async function loadUser(sam) {
+    const requestId = ++selectionRequestId;
+    const local = usersBySam.get(String(sam || '').toLowerCase());
+    if (local) {
+      updateSelectionFromData('user', local);
+    }
+    fetch(`/api/ad/user?sam=${encodeURIComponent(sam)}`, { headers: { 'Accept': 'application/json' } })
+      .then((response) => response.json())
+      .then((data) => {
+        if (requestId !== selectionRequestId) return;
+        if (data && !data.error && data.user) {
+          usersBySam.set(String(data.user.sam_account_name || '').toLowerCase(), data.user);
+          updateSelectionFromData('user', data.user);
+        }
+      })
+      .catch(() => {});
+  }
+
+  async function loadGroup(sam) {
+    const requestId = ++selectionRequestId;
+    const local = groupsBySam.get(String(sam || '').toLowerCase());
+    if (local) {
+      updateSelectionFromData('group', local);
+    }
+    fetch(`/api/ad/group?sam=${encodeURIComponent(sam)}`, { headers: { 'Accept': 'application/json' } })
+      .then((response) => response.json())
+      .then((data) => {
+        if (requestId !== selectionRequestId) return;
+        if (data && !data.error && data.group) {
+          groupsBySam.set(String(data.group.sam_account_name || '').toLowerCase(), data.group);
+          updateSelectionFromData('group', data.group);
+        }
+      })
+      .catch(() => {});
+  }
+
+  function fallbackUserFromRow(row) {
+    if (!row) return null;
+    const cells = row.querySelectorAll('td');
+    return {
+      name: cells[0]?.textContent?.trim() || '',
+      sam_account_name: row.dataset.userSam || '',
+      enabled: String(cells[2]?.textContent || '').trim().toLowerCase() === 'yes',
+      email: '',
+      department: '',
+      title: '',
+      member_of: [],
+    };
+  }
+
+  function fallbackGroupFromRow(row) {
+    if (!row) return null;
+    const cells = row.querySelectorAll('td');
+    return {
+      name: cells[0]?.textContent?.trim() || '',
+      sam_account_name: row.dataset.groupSam || '',
+      group_scope: cells[2]?.textContent?.trim() || '',
+      group_category: '',
+      members: [],
+      member_of: [],
+    };
+  }
+
+  identityTabs.forEach((tab) => {
+    tab.addEventListener('click', () => setIdentityTab(tab.dataset.identityTab));
+  });
+
+  if (attributeSearch) {
+    attributeSearch.addEventListener('input', () => {
+      attributeFilter = attributeSearch.value.trim();
+      if (currentObjectKind && currentObjectData) {
+        renderAttributesPanel(currentObjectKind, currentObjectData);
+      }
+    });
+  }
+
+  function handleUserRowSelect() {
+    const sam = String(this.dataset.userSam || '').trim();
+    const fallback = fallbackUserFromRow(this);
+    if (fallback) {
+      usersBySam.set(sam.toLowerCase(), { ...(usersBySam.get(sam.toLowerCase()) || {}), ...fallback });
+      updateSelectionFromData('user', usersBySam.get(sam.toLowerCase()) || fallback);
+    }
+    loadUser(sam);
+  }
+
+  function handleGroupRowSelect() {
+    const sam = String(this.dataset.groupSam || '').trim();
+    const fallback = fallbackGroupFromRow(this);
+    if (fallback) {
+      groupsBySam.set(sam.toLowerCase(), { ...(groupsBySam.get(sam.toLowerCase()) || {}), ...fallback });
+      updateSelectionFromData('group', groupsBySam.get(sam.toLowerCase()) || fallback);
+    }
+    loadGroup(sam);
+  }
+
+  function handleRowKeydown(event) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    this.click();
+  }
+
+  document.querySelectorAll('[data-user-select]').forEach((row) => {
+    row.addEventListener('click', handleUserRowSelect);
+    row.addEventListener('keydown', handleRowKeydown);
+  });
+
+  document.querySelectorAll('[data-group-select]').forEach((row) => {
+    row.addEventListener('click', handleGroupRowSelect);
+    row.addEventListener('keydown', handleRowKeydown);
+  });
+
+  document.addEventListener('click', (event) => {
+    const closeTrigger = event.target.closest('[data-identity-modal-close]');
+    if (closeTrigger) {
+      modal.close();
+      return;
+    }
+
+    const attributeClose = event.target.closest('[data-attribute-modal-close]');
+    if (attributeClose && attributeModal) {
+      attributeModal.close();
+      return;
+    }
+
+    const detailEdit = event.target.closest('[data-detail-edit]');
+    if (detailEdit && currentObjectKind && currentObjectData) {
+      openAttributeEditor(currentObjectKind, currentObjectData, detailEdit.dataset.detailEdit, getDetailValue(currentObjectData, detailEdit.dataset.detailEdit));
+      return;
+    }
+
+    const attributeEdit = event.target.closest('[data-attribute-edit]');
+    if (attributeEdit && currentObjectKind && currentObjectData) {
+      openAttributeEditor(currentObjectKind, currentObjectData, attributeEdit.dataset.attributeEdit, attributeEdit.dataset.attributeValue || '');
+      return;
+    }
+
+    const action = event.target.closest('[data-identity-action]');
+    if (!action) return;
+    const currentUser = selectedRows.user;
+    const currentGroup = selectedRows.group;
+    const actionName = action.dataset.identityAction;
+    const kind = actionName.startsWith('group-') || actionName === 'group-create' || (['edit', 'delete', 'membership'].includes(actionName) && currentGroup && !currentUser)
+      ? 'group'
+      : 'user';
+    const payload = kind === 'user' ? (currentUser || {}) : (currentGroup || {});
+    setMode(actionName, kind, payload);
+  });
+
+  form.addEventListener('submit', () => {
+    if (actionInput.value.startsWith('user-') || ['edit', 'delete', 'enable', 'disable', 'reset-password'].includes(actionInput.value)) {
+      samInput.value = fields.sam.value || samInput.value;
+    } else {
+      samInput.value = fields.groupSam.value || samInput.value;
+    }
+  });
+
+  const defaultUser = document.querySelector('[data-user-select]');
+  const defaultGroup = document.querySelector('[data-group-select]');
+  if (defaultUser) {
+    setIdentityTab('users');
+    loadUser(defaultUser.dataset.userSam);
+  } else if (defaultGroup) {
+    setIdentityTab('groups');
+    loadGroup(defaultGroup.dataset.groupSam);
+  } else {
+    setIdentityTab('users');
+  }
+})();
+</script>
+{% endblock %}

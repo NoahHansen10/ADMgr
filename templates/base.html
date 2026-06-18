@@ -1,0 +1,1707 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AD DNS Manager</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --bg-soft: #111b36;
+      --panel: rgba(15, 23, 42, 0.78);
+      --panel-border: rgba(148, 163, 184, 0.22);
+      --text: #e5eefc;
+      --muted: #9fb1d0;
+      --accent: #7dd3fc;
+      --accent-strong: #38bdf8;
+      --success: #34d399;
+      --error: #fb7185;
+      --warn: #fbbf24;
+      --shadow: 0 30px 80px rgba(2, 8, 23, 0.35);
+      --radius: 22px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      color: var(--text);
+      font-family: "Aptos", "Segoe UI", ui-sans-serif, sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(56, 189, 248, 0.22), transparent 36%),
+        radial-gradient(circle at top right, rgba(125, 211, 252, 0.12), transparent 28%),
+        linear-gradient(160deg, #060b18 0%, #0b1225 45%, #0f172a 100%);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+      background-size: 56px 56px;
+      mask-image: radial-gradient(circle at center, black 38%, transparent 100%);
+      opacity: 0.35;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: #b5ebff; }
+    .shell {
+      position: relative;
+      z-index: 1;
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: 28px 20px 48px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+
+    .brand {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .brand .eyebrow {
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      font-size: 0.76rem;
+      color: var(--muted);
+    }
+
+    .brand .title {
+      font-size: 1.4rem;
+      font-weight: 700;
+      margin: 0;
+    }
+
+    .brand .subtle {
+      color: var(--muted);
+      font-size: 0.96rem;
+    }
+
+    .nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    .nav a {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.45);
+      border: 1px solid var(--panel-border);
+      color: var(--text);
+      transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+    }
+
+    .nav a:hover {
+      transform: translateY(-1px);
+      border-color: rgba(125, 211, 252, 0.45);
+      background: rgba(30, 41, 59, 0.72);
+    }
+
+    .content {
+      display: grid;
+      gap: 18px;
+    }
+
+    .dns-tree-layout {
+      display: grid;
+      grid-template-columns: minmax(300px, 0.34fr) minmax(0, 1.66fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .identity-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 0.38fr) minmax(0, 0.62fr);
+      gap: 22px;
+      align-items: start;
+    }
+
+    .identity-layout > * {
+      min-width: 0;
+    }
+
+    .identity-layout .stack,
+    .identity-layout .card,
+    .identity-layout .table-wrap {
+      min-width: 0;
+    }
+
+    .identity-list-card {
+      overflow: hidden;
+    }
+
+    .identity-tabs {
+      display: inline-flex;
+      gap: 8px;
+      padding: 4px;
+      margin-bottom: 18px;
+      border-radius: 16px;
+      background: rgba(2, 6, 23, 0.26);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+    }
+
+    .identity-tab {
+      appearance: none;
+      border: 1px solid transparent;
+      border-radius: 12px;
+      padding: 10px 14px;
+      background: transparent;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .identity-tab:hover {
+      transform: none;
+      filter: none;
+      color: var(--text);
+      background: rgba(148, 163, 184, 0.08);
+    }
+
+    .identity-tab.active {
+      color: #f8fcff;
+      background: linear-gradient(135deg, var(--accent-strong), #0ea5e9);
+      border-color: rgba(125, 211, 252, 0.34);
+      box-shadow: 0 10px 24px rgba(14, 165, 233, 0.18);
+    }
+
+    .identity-tab-panel {
+      display: grid;
+      gap: 14px;
+    }
+
+    .identity-tab-panel[hidden] {
+      display: none !important;
+    }
+
+    .tree-secondary {
+      display: grid;
+      gap: 18px;
+      margin-top: 18px;
+    }
+
+    .hero, .card {
+      border: 1px solid var(--panel-border);
+      background: var(--panel);
+      backdrop-filter: blur(16px);
+      box-shadow: var(--shadow);
+      border-radius: var(--radius);
+    }
+
+    .hero {
+      padding: 28px;
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .hero h1, .card h2, .card h3 {
+      margin: 0 0 10px;
+      line-height: 1.1;
+    }
+
+    .hero h1 {
+      font-size: clamp(2rem, 4vw, 3.6rem);
+      letter-spacing: -0.04em;
+    }
+
+    .hero p, .card p, .helper, .meta {
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .hero-rail {
+      display: grid;
+      gap: 12px;
+    }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .kpi {
+      padding: 16px;
+      border-radius: 18px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+    }
+
+    .kpi .label {
+      display: block;
+      color: var(--muted);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+    }
+
+    .kpi .value {
+      font-size: 1rem;
+      font-weight: 600;
+      word-break: break-word;
+    }
+
+    .card {
+      padding: 20px;
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .card-grid.four {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      color: #dff7ff;
+      font-size: 0.92rem;
+    }
+
+    .button, button {
+      appearance: none;
+      border: 0;
+      border-radius: 14px;
+      padding: 10px 14px;
+      font-weight: 600;
+      cursor: pointer;
+      background: linear-gradient(135deg, var(--accent-strong), #0ea5e9);
+      color: #f8fcff;
+      transition: transform 160ms ease, filter 160ms ease, opacity 160ms ease;
+    }
+
+    .button.secondary, button.secondary {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      color: var(--text);
+    }
+
+    .button.danger, button.danger {
+      background: linear-gradient(135deg, #fb7185, #e11d48);
+    }
+
+    .icon-button {
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      display: inline-grid;
+      place-items: center;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      line-height: 1;
+    }
+
+    .icon-button.secondary {
+      background: rgba(15, 23, 42, 0.82);
+    }
+
+    .icon-button.danger {
+      background: linear-gradient(135deg, #fb7185, #e11d48);
+    }
+
+    .button:hover, button:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.03);
+    }
+
+    .button:disabled, button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      background: rgba(2, 6, 23, 0.45);
+      color: var(--text);
+      outline: none;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: rgba(125, 211, 252, 0.65);
+      box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.12);
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 0.92rem;
+      color: #dbe7fb;
+    }
+
+    .form-grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .form-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border-radius: 18px;
+      border: 1px solid rgba(148, 163, 184, 0.16);
+    }
+
+    .selectable-row {
+      cursor: pointer;
+    }
+
+    .selectable-row,
+    .selectable-row td,
+    .selectable-row th {
+      user-select: none;
+    }
+
+    .selectable-row:hover td {
+      background: rgba(56, 189, 248, 0.06);
+    }
+
+    .selectable-row.active td {
+      background: rgba(56, 189, 248, 0.12);
+    }
+
+    .table-wrap.compact {
+      border: 0;
+      border-radius: 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 760px;
+      background: rgba(2, 6, 23, 0.28);
+    }
+
+    th, td {
+      padding: 14px 16px;
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+    }
+
+    th {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      background: rgba(15, 23, 42, 0.75);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    table.compact {
+      min-width: 0;
+      background: rgba(2, 6, 23, 0.18);
+    }
+
+    table.compact th,
+    table.compact td {
+      padding: 8px 10px;
+      white-space: nowrap;
+    }
+
+    table.compact td.value-cell {
+      white-space: normal;
+      word-break: break-word;
+    }
+
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.92rem;
+      word-break: break-word;
+    }
+
+    .flash-stack {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .flash {
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid transparent;
+      background: rgba(15, 23, 42, 0.72);
+    }
+
+    .flash.success { border-color: rgba(52, 211, 153, 0.3); color: #bff7de; }
+    .flash.error { border-color: rgba(251, 113, 133, 0.3); color: #ffd1da; }
+    .flash.info { border-color: rgba(125, 211, 252, 0.3); color: #d9f3ff; }
+
+    .empty-state {
+      padding: 28px;
+      text-align: center;
+      color: var(--muted);
+    }
+
+    .stack {
+      display: grid;
+      gap: 16px;
+    }
+
+    .dns-tree details {
+      border-left: 1px solid rgba(148, 163, 184, 0.18);
+      margin-left: 10px;
+      padding-left: 14px;
+    }
+
+    .dns-tree > details {
+      border-left: 0;
+      margin-left: 0;
+      padding-left: 0;
+    }
+
+    .dns-tree summary {
+      cursor: pointer;
+      padding: 10px 0;
+      color: var(--text);
+      list-style: none;
+    }
+
+    .dns-tree summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .dns-tree summary::before {
+      content: "▸";
+      display: inline-block;
+      width: 1em;
+      color: var(--accent);
+      transition: transform 140ms ease;
+    }
+
+    .dns-tree details[open] > summary::before {
+      transform: rotate(90deg);
+    }
+
+    .tree-node, .tree-group {
+      display: grid;
+      gap: 10px;
+      padding: 6px 0 10px 18px;
+    }
+
+    .zone-stack {
+      gap: 12px;
+    }
+
+    .zone-node {
+      width: 100%;
+      text-align: left;
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      border-radius: 18px;
+      background: rgba(2, 6, 23, 0.18);
+      padding: 12px;
+      color: inherit;
+    }
+
+    .zone-card {
+      cursor: pointer;
+      display: grid;
+      gap: 8px;
+      position: relative;
+      padding-left: 28px;
+    }
+
+    .zone-card::before {
+      content: "▸";
+      position: absolute;
+      left: 12px;
+      top: 14px;
+      color: var(--accent);
+      transition: transform 140ms ease;
+    }
+
+    .zone-card:hover,
+    .zone-card.active {
+      border-color: rgba(56, 189, 248, 0.42);
+      box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.12), 0 0 0 1px rgba(56, 189, 248, 0.06);
+    }
+
+    .zone-card.active::before {
+      transform: rotate(90deg);
+    }
+
+    .zone-summary-line {
+      display: grid;
+      gap: 4px;
+    }
+
+    .zone-summary-meta,
+    .zone-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .attribute-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .attribute-row {
+      display: grid;
+      grid-template-columns: minmax(160px, 0.28fr) minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: start;
+      padding: 12px 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      background: rgba(2, 6, 23, 0.18);
+    }
+
+    .attribute-label {
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .attribute-value {
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: #dbe7fb;
+    }
+
+    .attribute-actions {
+      display: inline-flex;
+      gap: 8px;
+      justify-content: flex-end;
+      align-items: center;
+    }
+
+    .chip-cloud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .chip-button {
+      cursor: pointer;
+      background: rgba(56, 189, 248, 0.08);
+      color: #e6f8ff;
+    }
+
+    .zone-meta {
+      padding: 0 0 8px;
+    }
+
+    .zone-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 2px 0 10px;
+    }
+
+    .zone-folder {
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      border-radius: 16px;
+      background: rgba(2, 6, 23, 0.14);
+      padding: 0 12px;
+    }
+
+    .zone-folder[open] {
+      border-color: rgba(125, 211, 252, 0.45);
+      background: rgba(8, 15, 32, 0.62);
+      box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.12);
+    }
+
+    .zone-folder > summary {
+      padding: 10px 0;
+      font-weight: 600;
+    }
+
+    .zone-folder[open] > summary {
+      color: #ecf7ff;
+    }
+
+    .zone-folder-body {
+      padding: 0 0 12px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .zone-inspector {
+      border: 1px solid var(--panel-border);
+      background: rgba(8, 15, 32, 0.9);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      min-height: 100%;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .identity-inspector {
+      position: sticky;
+      top: 18px;
+      align-self: start;
+    }
+
+    .zone-inspector-shell {
+      display: grid;
+      gap: 16px;
+      padding: 18px 18px 20px;
+    }
+
+    .zone-inspector-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-start;
+    }
+
+    .zone-inspector-title {
+      margin: 6px 0 6px;
+      font-size: 1.5rem;
+      word-break: break-word;
+    }
+
+    .zone-record-tree {
+      display: grid;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .zone-record-table-wrap {
+      overflow: auto;
+      border-radius: 16px;
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      background: rgba(2, 6, 23, 0.16);
+    }
+
+    .zone-record-table {
+      min-width: 820px;
+      width: 100%;
+      border-collapse: collapse;
+      background: transparent;
+    }
+
+    .zone-record-table th,
+    .zone-record-table td {
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+    }
+
+    .zone-record-table th {
+      background: rgba(15, 23, 42, 0.88);
+    }
+
+    .zone-record-table td {
+      vertical-align: middle;
+    }
+
+    .zone-record-folder {
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      border-radius: 16px;
+      background: rgba(2, 6, 23, 0.12);
+      padding: 0 12px;
+      margin-top: 10px;
+    }
+
+    .zone-record-folder[open] {
+      border-color: rgba(56, 189, 248, 0.3);
+      background: rgba(8, 15, 32, 0.48);
+    }
+
+    .zone-record-tree > .zone-record-folder {
+      margin-top: 0;
+    }
+
+    .zone-folder-body .zone-record-folder {
+      margin-left: 16px;
+    }
+
+    .zone-record-folder > summary {
+      padding: 10px 0;
+      font-weight: 700;
+    }
+
+    .zone-record-folder .zone-folder-body {
+      padding-left: 0;
+    }
+
+    .folder-hint {
+      color: var(--muted);
+      font-size: 0.92rem;
+      padding: 0 2px 2px;
+    }
+
+    .folder-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .tree-meta, .tree-leaf {
+      color: var(--muted);
+      background: rgba(2, 6, 23, 0.26);
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      border-radius: 14px;
+      padding: 10px 12px;
+    }
+
+    .tree-leaf {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .tree-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .tree-actions a {
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 10px;
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.68);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      color: var(--text);
+    }
+
+    .record-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    dialog.record-dialog {
+      width: min(92vw, 760px);
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      padding: 0;
+    }
+
+    dialog.record-dialog::backdrop {
+      background: rgba(2, 6, 23, 0.78);
+      backdrop-filter: blur(10px);
+    }
+
+    .record-dialog-panel {
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      background: linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(8, 15, 32, 0.98));
+      box-shadow: var(--shadow);
+      border-radius: 22px;
+      padding: 22px;
+    }
+
+    .record-dialog-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-start;
+      margin-bottom: 14px;
+    }
+
+    .record-dialog-title {
+      margin: 0;
+      font-size: 1.3rem;
+    }
+
+    .record-dialog-summary {
+      margin: 0 0 14px;
+      color: var(--muted);
+    }
+
+    .record-dialog-summary strong {
+      color: var(--text);
+    }
+
+    .record-field-grid {
+      display: grid;
+      gap: 12px;
+    }
+
+    .field-hidden {
+      display: none !important;
+    }
+
+    .dialog-section {
+      display: grid;
+      gap: 12px;
+    }
+
+    .dialog-section .helper {
+      margin-top: -2px;
+    }
+
+    .preview-table {
+      min-width: 0;
+      background: rgba(2, 6, 23, 0.18);
+    }
+
+    .preview-table th,
+    .preview-table td {
+      padding: 10px 12px;
+    }
+
+    .preview-table th:first-child,
+    .preview-table td:first-child {
+      min-width: 130px;
+    }
+
+    .preview-table th:nth-child(2),
+    .preview-table td:nth-child(2) {
+      min-width: 220px;
+    }
+
+    .preview-table th:nth-child(3),
+    .preview-table td:nth-child(3) {
+      min-width: 320px;
+    }
+
+    .sort-header {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      font: inherit;
+      font-weight: 700;
+      padding: 0;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .sort-header::after {
+      content: "↕";
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+
+    .sort-header[data-sort-direction="asc"]::after {
+      content: "↑";
+      color: var(--accent);
+    }
+
+    .sort-header[data-sort-direction="desc"]::after {
+      content: "↓";
+      color: var(--accent);
+    }
+
+    .preview-table .record-actions {
+      justify-content: flex-start;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1.3fr 0.7fr;
+      gap: 16px;
+    }
+
+    .rule {
+      height: 1px;
+      background: rgba(148, 163, 184, 0.14);
+      margin: 18px 0;
+    }
+
+    @media (max-width: 900px) {
+      .hero, .card-grid, .split, .form-row, .topbar {
+        grid-template-columns: 1fr;
+        display: grid;
+      }
+
+      .nav {
+        justify-content: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar">
+      <div class="brand">
+        <div class="eyebrow">AD DNS Manager</div>
+        <h1 class="title">Operational DNS control</h1>
+        <div class="subtle">Curated access to your zone, with authentication and service-account-backed changes.</div>
+      </div>
+      <div class="nav">
+        <a href="{{ url_for('index') }}">DNS</a>
+        <a href="{{ url_for('identity') }}">Users & Groups</a>
+        <a href="/logout">Logout</a>
+      </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-stack">
+          {% for category, message in messages %}
+            <div class="flash {{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <main class="content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  <dialog id="recordModal" class="record-dialog" aria-labelledby="recordModalTitle">
+    <div class="record-dialog-panel">
+      <div class="record-dialog-header">
+        <div>
+          <div class="eyebrow">DNS record</div>
+          <h3 id="recordModalTitle" class="record-dialog-title">Record action</h3>
+        </div>
+        <button type="button" class="secondary" data-modal-close>Close</button>
+      </div>
+
+      <p id="recordModalSummary" class="record-dialog-summary"></p>
+
+      <form id="recordModalForm" method="post" class="form-grid">
+        <input type="hidden" name="return_to" id="recordModalReturnTo">
+        <input type="hidden" name="original_zone" id="recordModalOriginalZone">
+        <input type="hidden" name="original_name" id="recordModalOriginalName">
+        <input type="hidden" name="original_type" id="recordModalOriginalType">
+        <input type="hidden" name="original_target" id="recordModalOriginalTarget">
+
+        <div class="record-field-grid" id="recordModalFields">
+          <div class="form-row">
+            <div id="recordModalZoneField">
+              <label for="recordModalZone">Zone</label>
+              <select id="recordModalZone" name="zone">
+                <option value="">Current zone</option>
+                {% for group_name, group_zones in zone_choice_groups.items() %}
+                  {% if group_zones %}
+                    <optgroup label="{{ group_name|capitalize }} zones">
+                      {% for zone_name in group_zones %}
+                        <option value="{{ zone_name }}">{{ zone_name }}</option>
+                      {% endfor %}
+                    </optgroup>
+                  {% endif %}
+                {% endfor %}
+              </select>
+            </div>
+            <div id="recordModalNameField">
+              <label for="recordModalName">Name</label>
+              <input id="recordModalName" name="name" placeholder="app">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div id="recordModalTypeField">
+              <label for="recordModalType">Type</label>
+              <select id="recordModalType" name="type">
+                <option value="A">A</option>
+                <option value="AAAA">AAAA</option>
+                <option value="CNAME">CNAME</option>
+                <option value="NS">NS</option>
+                <option value="MX">MX</option>
+                <option value="SRV">SRV</option>
+                <option value="PTR">PTR</option>
+                <option value="TXT">TXT</option>
+              </select>
+            </div>
+            <div id="recordModalTTLField">
+              <label for="recordModalTTL">TTL seconds</label>
+              <input id="recordModalTTL" name="ttl" inputmode="numeric" value="3600">
+            </div>
+          </div>
+
+          <div id="recordModalValueField">
+            <label id="recordModalValueLabel" for="recordModalValue">Target</label>
+            <input id="recordModalValue" name="value" placeholder="target or IP address">
+            <div class="helper" id="recordModalValueHelp">The field below changes based on record type.</div>
+          </div>
+
+          <div class="form-row" id="recordModalPreferenceRow">
+            <div>
+              <label for="recordModalPreference">Preference</label>
+              <input id="recordModalPreference" name="preference" inputmode="numeric" placeholder="10">
+            </div>
+            <div></div>
+          </div>
+
+          <div class="form-row" id="recordModalPriorityRow">
+            <div>
+              <label for="recordModalPriority">Priority</label>
+              <input id="recordModalPriority" name="priority" inputmode="numeric" placeholder="0">
+            </div>
+            <div>
+              <label for="recordModalWeight">Weight</label>
+              <input id="recordModalWeight" name="weight" inputmode="numeric" placeholder="0">
+            </div>
+          </div>
+
+          <div class="form-row" id="recordModalPortRow">
+            <div>
+              <label for="recordModalPort">Port</label>
+              <input id="recordModalPort" name="port" inputmode="numeric" placeholder="443">
+            </div>
+            <div></div>
+          </div>
+
+        </div>
+        <div class="record-dialog-summary field-hidden" id="recordModalDeleteSummary"></div>
+
+        <div class="form-actions" style="justify-content:flex-end;">
+          <button type="button" class="secondary" data-modal-close>Cancel</button>
+          <button id="recordModalSubmit" type="submit">Save</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <script>
+    (() => {
+      const modal = document.getElementById('recordModal');
+      const form = document.getElementById('recordModalForm');
+      if (!modal || !form) {
+        return;
+      }
+
+      const title = document.getElementById('recordModalTitle');
+      const summary = document.getElementById('recordModalSummary');
+      const deleteSummary = document.getElementById('recordModalDeleteSummary');
+      const submit = document.getElementById('recordModalSubmit');
+      const returnTo = document.getElementById('recordModalReturnTo');
+      const originalZone = document.getElementById('recordModalOriginalZone');
+      const originalName = document.getElementById('recordModalOriginalName');
+      const originalType = document.getElementById('recordModalOriginalType');
+      const originalTarget = document.getElementById('recordModalOriginalTarget');
+      const fields = document.getElementById('recordModalFields');
+      const zoneField = document.getElementById('recordModalZoneField');
+      const nameField = document.getElementById('recordModalNameField');
+      const typeField = document.getElementById('recordModalTypeField');
+      const ttlField = document.getElementById('recordModalTTLField');
+      const valueField = document.getElementById('recordModalValueField');
+      const preferenceRow = document.getElementById('recordModalPreferenceRow');
+      const priorityRow = document.getElementById('recordModalPriorityRow');
+      const portRow = document.getElementById('recordModalPortRow');
+      const typeSelect = document.getElementById('recordModalType');
+      const zoneInput = document.getElementById('recordModalZone');
+      const nameInput = document.getElementById('recordModalName');
+      const ttlInput = document.getElementById('recordModalTTL');
+      const valueInput = document.getElementById('recordModalValue');
+      const preferenceInput = document.getElementById('recordModalPreference');
+      const priorityInput = document.getElementById('recordModalPriority');
+      const weightInput = document.getElementById('recordModalWeight');
+      const portInput = document.getElementById('recordModalPort');
+      const valueLabel = document.getElementById('recordModalValueLabel');
+      const valueHelp = document.getElementById('recordModalValueHelp');
+      const selectedZoneInspector = document.getElementById('zoneInspector');
+      const selectedZoneName = document.getElementById('selectedZoneName');
+      const selectedZoneMeta = document.getElementById('selectedZoneMeta');
+      const selectedZoneSettingsMeta = document.getElementById('selectedZoneSettingsMeta');
+      const selectedZoneRecords = document.getElementById('selectedZoneRecords');
+      const selectedZoneDelegations = document.getElementById('selectedZoneDelegations');
+      const selectedZoneSettings = document.getElementById('selectedZoneSettings');
+      const selectedZoneAddRecord = document.querySelector('[data-selected-zone-add-record]');
+      const selectedZoneSettingsButton = document.querySelector('[data-selected-zone-settings]');
+      const selectedZoneAgeToggle = selectedZoneSettings?.querySelector('[data-zone-age-toggle]');
+      const selectedZoneDelete = selectedZoneSettings?.querySelector('[data-zone-delete]');
+      let currentSelectedZone = '';
+
+      const fieldDefaults = {
+        zone: '',
+        name: '',
+        type: 'A',
+        value: '',
+        ttl: '3600',
+        preference: '',
+        priority: '',
+        weight: '',
+        port: '',
+      };
+
+      const recordTypeConfig = {
+        A: { label: 'IPv4 address', help: 'Enter the IPv4 address for the record.' },
+        AAAA: { label: 'IPv6 address', help: 'Enter the IPv6 address for the record.' },
+        CNAME: { label: 'Target host', help: 'Enter the canonical host name this alias should point to.' },
+        NS: { label: 'Name server', help: 'Enter the authoritative name server host name.' },
+        MX: { label: 'Mail exchange', help: 'Enter the mail server host name.' },
+        SRV: { label: 'Target host', help: 'Enter the service target host name.' },
+        PTR: { label: 'PTR target', help: 'Enter the host name the reverse record should resolve to.' },
+        TXT: { label: 'Text value', help: 'Enter the literal TXT value.' },
+      };
+
+      function setHidden(el, hidden) {
+        if (!el) return;
+        el.classList.toggle('field-hidden', hidden);
+      }
+
+      function parseSortValue(value) {
+        const text = String(value ?? '').trim();
+        if (!text) return { kind: 'text', value: '' };
+        const numeric = Number(text);
+        if (!Number.isNaN(numeric) && text !== '') {
+          return { kind: 'number', value: numeric };
+        }
+        return { kind: 'text', value: text.toLowerCase() };
+      }
+
+      function compareSortValues(left, right) {
+        if (left.kind === 'number' && right.kind === 'number') {
+          return left.value - right.value;
+        }
+        return left.value.localeCompare(right.value, undefined, { numeric: true, sensitivity: 'base' });
+      }
+
+      function escapeHtml(value) {
+        return String(value ?? '')
+          .replaceAll('&', '&amp;')
+          .replaceAll('<', '&lt;')
+          .replaceAll('>', '&gt;')
+          .replaceAll('"', '&quot;')
+          .replaceAll("'", '&#39;');
+      }
+
+      function buildZoneMeta(payload) {
+        const parts = [
+          `Type: ${payload.zoneType || ''}`,
+          `Reverse: ${payload.zoneReverse || ''}`,
+          `DS: ${payload.zoneDs || ''}`,
+        ];
+        return parts.join('  ');
+      }
+
+      const zoneRecordState = {
+        zoneName: '',
+        records: [],
+        sortKey: 'type',
+        sortDirection: 'asc',
+      };
+
+      function normalizeRecordName(name) {
+        const text = String(name ?? '').trim();
+        return text || '@';
+      }
+
+      function getRecordLeafName(name) {
+        const text = normalizeRecordName(name);
+        if (text === '@') return '@';
+        const parts = text.split('.').filter(Boolean);
+        return parts[0] || '@';
+      }
+
+      function getRecordFolderPath(name) {
+        const text = normalizeRecordName(name);
+        if (text === '@') return [];
+        const parts = text.split('.').filter(Boolean);
+        if (parts.length <= 1) return [];
+        return parts.slice(1).reverse();
+      }
+
+      function compareRecordValues(left, right, sortKey) {
+        const valueFor = (record) => {
+          if (sortKey === 'ttl') {
+            return Number(record.ttl_seconds || record.ttl || 0);
+          }
+          if (sortKey === 'name') return record.displayName || record.name || '';
+          if (sortKey === 'target') return record.target || '';
+          return record.type || '';
+        };
+        const a = valueFor(left);
+        const b = valueFor(right);
+        if (sortKey === 'ttl') {
+          return a - b;
+        }
+        return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+      }
+
+      function sortZoneRecords(records) {
+        const sorted = [...records];
+        sorted.sort((left, right) => {
+          const result = compareRecordValues(left, right, zoneRecordState.sortKey);
+          return zoneRecordState.sortDirection === 'asc' ? result : -result;
+        });
+        return sorted;
+      }
+
+      function buildRecordTree(records) {
+        const root = { folders: new Map(), records: [] };
+
+        function ensureChild(node, folderName) {
+          if (!node.folders.has(folderName)) {
+            node.folders.set(folderName, { folders: new Map(), records: [] });
+          }
+          return node.folders.get(folderName);
+        }
+
+        records.forEach((record) => {
+          const displayName = getRecordLeafName(record.name);
+          const folderPath = getRecordFolderPath(record.name);
+          let node = root;
+          folderPath.forEach((folderName) => {
+            node = ensureChild(node, folderName);
+          });
+          node.records.push({ ...record, displayName });
+        });
+
+        return root;
+      }
+
+      function renderRecordActions(record) {
+        const attrs = [
+          `data-zone="${escapeHtml(record.zone || zoneRecordState.zoneName || '')}"`,
+          `data-name="${escapeHtml(record.name || '')}"`,
+          `data-type="${escapeHtml(record.type || '')}"`,
+          `data-value="${escapeHtml(record.target || '')}"`,
+          `data-ttl="${escapeHtml(record.ttl_seconds || record.ttl || '')}"`,
+          `data-original-zone="${escapeHtml(record.zone || zoneRecordState.zoneName || '')}"`,
+          `data-original-name="${escapeHtml(record.name || '')}"`,
+          `data-original-type="${escapeHtml(record.type || '')}"`,
+          `data-original-target="${escapeHtml(record.target || '')}"`,
+        ].join(' ');
+        return `
+          <div class="record-actions">
+            <button type="button" class="icon-button secondary" data-record-action="add" ${attrs}>+</button>
+            <button type="button" class="icon-button secondary" data-record-action="edit" ${attrs}>⚙</button>
+            <button type="button" class="icon-button danger" data-record-action="delete" ${attrs}>-</button>
+          </div>
+        `;
+      }
+
+      function renderRecordTable(records) {
+        if (!records.length) {
+          return '';
+        }
+
+        const rows = sortZoneRecords(records).map((record) => `
+          <tr>
+            <td data-sort-key="type" data-sort-value="${escapeHtml(record.type || '')}">${escapeHtml(record.type || '')}</td>
+            <td class="mono" data-sort-key="name" data-sort-value="${escapeHtml(record.displayName || record.name || '')}">${escapeHtml(record.displayName || record.name || '')}</td>
+            <td class="mono value-cell" data-sort-key="target" data-sort-value="${escapeHtml(record.target || '')}">${escapeHtml(record.target || '')}</td>
+            <td class="mono" data-sort-key="ttl" data-sort-value="${escapeHtml(record.ttl_seconds || record.ttl || '')}">${escapeHtml(record.ttl || '')}</td>
+            <td>${renderRecordActions(record)}</td>
+          </tr>
+        `).join('');
+
+        return `
+          <div class="zone-record-table-wrap">
+            <table class="zone-record-table" data-sortable-table>
+              <thead>
+                <tr>
+                  <th><button type="button" class="sort-header" data-sort-key="type" data-sort-direction="${zoneRecordState.sortKey === 'type' ? zoneRecordState.sortDirection : ''}">Type</button></th>
+                  <th><button type="button" class="sort-header" data-sort-key="name" data-sort-direction="${zoneRecordState.sortKey === 'name' ? zoneRecordState.sortDirection : ''}">Name</button></th>
+                  <th><button type="button" class="sort-header" data-sort-key="target" data-sort-direction="${zoneRecordState.sortKey === 'target' ? zoneRecordState.sortDirection : ''}">Target</button></th>
+                  <th><button type="button" class="sort-header" data-sort-key="ttl" data-sort-direction="${zoneRecordState.sortKey === 'ttl' ? zoneRecordState.sortDirection : ''}">TTL</button></th>
+                  <th>Settings</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        `;
+      }
+
+      function renderRecordFolder(node, label, depth = 0) {
+        const folderNames = Array.from(node.folders.keys()).sort((left, right) => left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' }));
+        const hasRecords = node.records.length > 0;
+        const hasChildren = folderNames.length > 0;
+        const parts = [];
+
+        if (hasRecords) {
+          parts.push(renderRecordTable(node.records));
+        }
+        if (hasChildren) {
+          folderNames.forEach((folderName) => {
+            const child = node.folders.get(folderName);
+            parts.push(`
+              <details class="zone-record-folder" open>
+                <summary class="mono">${escapeHtml(folderName)}</summary>
+                <div class="zone-folder-body">
+                  ${renderRecordFolder(child, folderName, depth + 1)}
+                </div>
+              </details>
+            `);
+          });
+        }
+
+        if (!parts.length) {
+          return '<div class="empty-state">No records found in this folder.</div>';
+        }
+        return parts.join('');
+      }
+
+      function renderZoneRecordTree(records) {
+        const root = buildRecordTree(records);
+        return `
+          <div class="zone-record-tree">
+            ${renderRecordTable(root.records)}
+            ${Array.from(root.folders.keys()).sort((left, right) => left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' })).map((folderName) => `
+              <details class="zone-record-folder" open>
+                <summary class="mono">${escapeHtml(folderName)}</summary>
+                <div class="zone-folder-body">
+                  ${renderRecordFolder(root.folders.get(folderName), folderName, 1)}
+                </div>
+              </details>
+            `).join('')}
+            ${!root.records.length && !root.folders.size ? '<div class="empty-state">No records found in this zone.</div>' : ''}
+          </div>
+        `;
+      }
+
+      function updateSelectedZoneDetails(payload) {
+        const zoneName = payload.zoneName || payload.name || '';
+        if (!zoneName || !selectedZoneRecords || !selectedZoneDelegations || !selectedZoneSettings) {
+          return;
+        }
+
+        currentSelectedZone = zoneName;
+        zoneRecordState.zoneName = zoneName;
+        zoneRecordState.records = [];
+        zoneRecordState.sortKey = 'type';
+        zoneRecordState.sortDirection = 'asc';
+        const zoneType = payload.zoneType || '';
+        const zoneReverse = payload.zoneReverse || '';
+        const zoneDs = payload.zoneDs || '';
+        const zoneSigned = payload.zoneSigned || '';
+        const zoneAging = payload.zoneAging || '';
+        const zoneReplication = payload.zoneReplication || '';
+        const selectedMetaLine = buildZoneMeta({ zoneType, zoneReverse, zoneDs });
+
+        if (selectedZoneName) selectedZoneName.textContent = zoneName;
+        if (selectedZoneMeta) selectedZoneMeta.textContent = selectedMetaLine;
+        if (selectedZoneSettingsMeta) {
+          selectedZoneSettingsMeta.innerHTML = `
+            <span>Signed: ${escapeHtml(zoneSigned)}</span>
+            <span>Aging: ${escapeHtml(zoneAging)}</span>
+            <span>Replication: ${escapeHtml(zoneReplication)}</span>
+          `;
+        }
+
+        selectedZoneRecords.dataset.zoneRecordsUrl = `/api/zone-records?zone=${encodeURIComponent(zoneName)}&type=ALL`;
+        selectedZoneRecords.dataset.zoneRecordsLoaded = 'false';
+        selectedZoneRecords.open = true;
+        selectedZoneRecords.querySelector('[data-zone-records-body]').innerHTML = '';
+
+        selectedZoneDelegations.dataset.zoneDelegationsUrl = `/api/zone-delegations?zone=${encodeURIComponent(zoneName)}`;
+        selectedZoneDelegations.dataset.zoneDelegationsLoaded = 'false';
+        selectedZoneDelegations.querySelector('[data-zone-delegations-body]').innerHTML = '';
+
+        if (selectedZoneAddRecord) {
+          selectedZoneAddRecord.dataset.zone = zoneName;
+        }
+        if (selectedZoneSettingsButton) {
+          selectedZoneSettingsButton.dataset.zone = zoneName;
+        }
+        if (selectedZoneAgeToggle) {
+          selectedZoneAgeToggle.dataset.zoneName = zoneName;
+          selectedZoneAgeToggle.dataset.agingEnabled = String(zoneAging).toLowerCase() === 'true' ? 'true' : 'false';
+        }
+        if (selectedZoneDelete) {
+          selectedZoneDelete.dataset.zoneName = zoneName;
+        }
+
+        document.querySelectorAll('[data-zone-select]').forEach((btn) => {
+          btn.classList.toggle('active', btn.dataset.zoneName === zoneName);
+        });
+
+        loadZoneFolder(selectedZoneRecords, 'records');
+      }
+
+      function sortTableByHeader(header) {
+        const table = header.closest('table[data-sortable-table]');
+        if (!table) return;
+        const key = header.dataset.sortKey;
+        if (!key) return;
+
+        const currentDirection = header.dataset.sortDirection || 'none';
+        const direction = currentDirection === 'asc' ? 'desc' : 'asc';
+        const tbody = table.tBodies[0];
+        if (!tbody) return;
+
+        const headers = table.querySelectorAll('.sort-header[data-sort-key]');
+        headers.forEach((th) => {
+          if (th !== header) {
+            th.dataset.sortDirection = '';
+          }
+          th.dataset.sortDirection = th === header ? direction : '';
+        });
+
+        const rows = Array.from(tbody.rows);
+        rows.sort((a, b) => {
+          const leftCell = a.querySelector(`[data-sort-key="${key}"]`);
+          const rightCell = b.querySelector(`[data-sort-key="${key}"]`);
+          const left = parseSortValue(leftCell?.dataset.sortValue ?? leftCell?.textContent);
+          const right = parseSortValue(rightCell?.dataset.sortValue ?? rightCell?.textContent);
+          const result = compareSortValues(left, right);
+          return direction === 'asc' ? result : -result;
+        });
+
+        rows.forEach((row) => tbody.appendChild(row));
+        header.dataset.sortDirection = direction;
+        table.dataset.sortDirection = direction;
+      }
+
+      function renderCurrentZoneRecords() {
+        if (!selectedZoneRecords) return;
+        const body = selectedZoneRecords.querySelector('[data-zone-records-body]');
+        if (!body) return;
+        body.innerHTML = renderZoneRecordTree(zoneRecordState.records);
+      }
+
+      function setReturnTo() {
+        returnTo.value = window.location.pathname + window.location.search + window.location.hash;
+      }
+
+      function syncTypeUI(type) {
+        const cfg = recordTypeConfig[type] || recordTypeConfig.A;
+        valueLabel.textContent = cfg.label;
+        valueHelp.textContent = cfg.help;
+        setHidden(preferenceRow, type !== 'MX');
+        setHidden(priorityRow, type !== 'SRV');
+        setHidden(portRow, type !== 'SRV');
+      }
+
+      function setMode(mode) {
+        const isDelete = mode === 'delete';
+        setHidden(fields, isDelete);
+        setHidden(deleteSummary, !isDelete);
+        submit.classList.toggle('danger', isDelete);
+        submit.textContent = isDelete ? 'Delete record' : (mode === 'edit' ? 'Save changes' : 'Create record');
+      }
+
+      function fillValues(payload) {
+        const data = { ...fieldDefaults, ...payload };
+        zoneInput.value = data.zone || '';
+        nameInput.value = data.name || '';
+        typeSelect.value = (data.type || 'A').toUpperCase();
+        valueInput.value = data.value || '';
+        ttlInput.value = data.ttl || '3600';
+        preferenceInput.value = data.preference || '';
+        priorityInput.value = data.priority || '';
+        weightInput.value = data.weight || '';
+        portInput.value = data.port || '';
+        originalZone.value = data.originalZone || data.zone || '';
+        originalName.value = data.originalName || data.name || '';
+        originalType.value = (data.originalType || data.type || 'A').toUpperCase();
+        originalTarget.value = data.originalTarget || data.value || '';
+      }
+
+      function openRecordModal(mode, payload = {}) {
+        const normalizedMode = mode === 'edit' || mode === 'delete' ? mode : 'add';
+        const data = {
+          zone: payload.zone || payload.originalZone || '',
+          name: payload.name || payload.originalName || '',
+          type: (payload.type || payload.originalType || 'A').toUpperCase(),
+          value: payload.value || payload.originalTarget || '',
+          ttl: payload.ttl || '3600',
+          preference: payload.preference || '',
+          priority: payload.priority || '',
+          weight: payload.weight || '',
+          port: payload.port || '',
+          originalZone: payload.originalZone || payload.zone || '',
+          originalName: payload.originalName || payload.name || '',
+          originalType: (payload.originalType || payload.type || 'A').toUpperCase(),
+          originalTarget: payload.originalTarget || payload.value || '',
+        };
+
+        title.textContent = normalizedMode === 'edit' ? 'Edit DNS record' : normalizedMode === 'delete' ? 'Delete DNS record' : 'Add DNS record';
+        summary.textContent = normalizedMode === 'delete'
+          ? `${data.type} ${data.name}${data.zone ? '.' + data.zone : ''}`
+          : `${data.type} ${data.name || '(new record)'}${data.zone ? '.' + data.zone : ''}`;
+        deleteSummary.textContent = normalizedMode === 'delete'
+          ? `Delete ${data.type} record ${data.name}${data.zone ? '.' + data.zone : ''}?`
+          : '';
+        form.action = normalizedMode === 'edit' ? '/records/edit' : normalizedMode === 'delete' ? '/records/delete' : '/records/add';
+        setReturnTo();
+        fillValues(data);
+        syncTypeUI(typeSelect.value);
+        setMode(normalizedMode);
+        modal.showModal();
+        if (normalizedMode !== 'delete') {
+          zoneInput.focus();
+        }
+      }
+
+      function closeRecordModal() {
+        if (modal.open) {
+          modal.close();
+        }
+      }
+
+      window.openRecordModal = openRecordModal;
+      window.closeRecordModal = closeRecordModal;
+
+      typeSelect.addEventListener('change', () => syncTypeUI(typeSelect.value));
+
+      document.addEventListener('click', (event) => {
+        const closeTrigger = event.target.closest('[data-modal-close]');
+        if (closeTrigger) {
+          closeRecordModal();
+          return;
+        }
+
+        const sortTrigger = event.target.closest('.sort-header[data-sort-key]');
+        if (sortTrigger) {
+          const table = sortTrigger.closest('table[data-sortable-table]');
+          const isZoneRecordsTable = table && table.closest('[data-zone-records-body]');
+          if (isZoneRecordsTable) {
+            const key = sortTrigger.dataset.sortKey;
+            const nextDirection = zoneRecordState.sortKey === key && zoneRecordState.sortDirection === 'asc' ? 'desc' : 'asc';
+            zoneRecordState.sortKey = key;
+            zoneRecordState.sortDirection = nextDirection;
+            renderCurrentZoneRecords();
+          } else {
+            sortTableByHeader(sortTrigger);
+          }
+          return;
+        }
+
+        const zoneSelectTrigger = event.target.closest('[data-zone-select]');
+        if (zoneSelectTrigger) {
+          updateSelectedZoneDetails(zoneSelectTrigger.dataset);
+          return;
+        }
+
+        const selectedZoneAddTrigger = event.target.closest('[data-selected-zone-add-record]');
+        if (selectedZoneAddTrigger && currentSelectedZone) {
+          openRecordModal('add', { zone: currentSelectedZone, type: 'A', value: '', ttl: '3600' });
+          return;
+        }
+
+        const selectedZoneSettingsTrigger = event.target.closest('[data-selected-zone-settings]');
+        if (selectedZoneSettingsTrigger) {
+          selectedZoneSettings.open = true;
+          selectedZoneSettings.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          return;
+        }
+
+        const trigger = event.target.closest('[data-record-action]');
+        if (!trigger) return;
+        const payload = { ...trigger.dataset };
+        openRecordModal(trigger.dataset.recordAction, payload);
+      });
+
+      function loadZoneFolder(details, kind) {
+        const urlAttr = kind === 'records' ? 'zoneRecordsUrl' : 'zoneDelegationsUrl';
+        const loadedAttr = kind === 'records' ? 'zoneRecordsLoaded' : 'zoneDelegationsLoaded';
+        const bodySelector = kind === 'records' ? '[data-zone-records-body]' : '[data-zone-delegations-body]';
+        if (!details.open || !details.dataset[urlAttr] || details.dataset[loadedAttr] === 'true') return;
+
+        const body = details.querySelector(bodySelector);
+        if (!body) return;
+        body.textContent = kind === 'records' ? 'Loading records...' : 'Loading delegations...';
+        fetch(details.dataset[urlAttr], { headers: { 'Accept': 'application/json' } })
+          .then((response) => response.json())
+          .then((data) => {
+            details.dataset[loadedAttr] = 'true';
+            if (data.error) {
+              body.innerHTML = `<div class="empty-state">${escapeHtml(data.error)}</div>`;
+              return;
+            }
+
+            if (kind === 'records') {
+              const records = data.records || [];
+              zoneRecordState.zoneName = data.zone || currentSelectedZone || '';
+              zoneRecordState.records = records.map((record) => ({
+                ...record,
+                displayName: getRecordLeafName(record.name),
+              }));
+              if (!records.length) {
+                body.innerHTML = '<div class="empty-state">No records found in this zone.</div>';
+                return;
+              }
+              body.innerHTML = renderZoneRecordTree(zoneRecordState.records);
+              return;
+            }
+
+            const delegations = data.delegations || [];
+            if (!delegations.length) {
+              body.innerHTML = '<div class="empty-state">No delegations found in this zone.</div>';
+              return;
+            }
+
+            const rows = delegations.map((delegation) => {
+              const safeChild = delegation.child || '';
+              const safeNs = delegation.ns || '';
+              const safeIp = delegation.ip || '';
+              return `
+                <tr>
+                  <td class="mono">${escapeHtml(safeChild)}</td>
+                  <td class="mono">${escapeHtml(safeNs)}</td>
+                  <td class="mono">${escapeHtml(safeIp)}</td>
+                </tr>`;
+            }).join('');
+
+            body.innerHTML = `
+              <div class="table-wrap compact">
+                <table class="compact preview-table">
+                  <thead>
+                    <tr>
+                      <th>Child zone</th>
+                      <th>Name server</th>
+                      <th>IP address</th>
+                    </tr>
+                  </thead>
+                  <tbody>${rows}</tbody>
+                </table>
+              </div>
+            `;
+          })
+          .catch((error) => {
+            body.innerHTML = `<div class="empty-state">${error}</div>`;
+          });
+      }
+
+      document.querySelectorAll('[data-zone-records-url]').forEach((details) => {
+        details.addEventListener('toggle', () => loadZoneFolder(details, 'records'));
+      });
+
+      document.querySelectorAll('[data-zone-delegations-url]').forEach((details) => {
+        details.addEventListener('toggle', () => loadZoneFolder(details, 'delegations'));
+      });
+
+      const defaultZoneName = selectedZoneInspector?.dataset.defaultZone || '';
+      const defaultZoneCard = Array.from(document.querySelectorAll('[data-zone-select]')).find((btn) => btn.dataset.zoneName === defaultZoneName)
+        || document.querySelector('[data-zone-select]');
+      if (defaultZoneCard) {
+        updateSelectedZoneDetails(defaultZoneCard.dataset);
+      }
+    })();
+  </script>
+  {% block page_scripts %}{% endblock %}
+</body>
+</html>

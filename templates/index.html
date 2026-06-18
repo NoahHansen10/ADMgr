@@ -1,0 +1,536 @@
+{% extends "base.html" %}
+{% block content %}
+{% macro render_zone_branch(zone_rows, empty_message, branch_id) %}
+  {% if zone_rows %}
+    <div class="tree-node zone-stack" id="{{ branch_id }}-zones">
+      {% for zone_row in zone_rows %}
+        {% set zone_name = zone_row.name %}
+        <button
+          type="button"
+          class="zone-node zone-card"
+          data-zone-select
+          data-zone-name="{{ zone_name }}"
+          data-zone-type="{{ zone_row.type }}"
+          data-zone-reverse="{{ zone_row.reverse }}"
+          data-zone-ds="{{ zone_row.ds }}"
+          data-zone-signed="{{ zone_row.signed }}"
+          data-zone-aging="{{ zone_row.aging }}"
+          data-zone-replication="{{ zone_row.replication_scope }}"
+        >
+          <span class="zone-summary-line">
+            <strong class="mono">{{ zone_name }}</strong>
+            <span class="zone-summary-meta">
+              <span>Type: {{ zone_row.type }}</span>
+              <span>Reverse: {{ zone_row.reverse }}</span>
+              <span>DS: {{ zone_row.ds }}</span>
+            </span>
+          </span>
+        </button>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty-state">{{ empty_message }}</div>
+  {% endif %}
+{% endmacro %}
+
+<section class="hero" id="overview">
+  <div>
+    <span class="chip">Signed in as {{ user.name }}</span>
+    <h1>One-page DNS control</h1>
+    <p>Everything is surfaced inside the tree explorer so the full DNS workflow stays in one nested control plane.</p>
+  </div>
+
+  <div class="hero-rail">
+    <div class="kpi-grid">
+      <div class="kpi">
+        <span class="label">Server</span>
+        <div class="value mono">{{ server }}</div>
+      </div>
+      <div class="kpi">
+        <span class="label">Zone scope</span>
+        <div class="value mono">{{ zone }}</div>
+      </div>
+      <div class="kpi">
+        <span class="label">Role</span>
+        <div class="value">{{ "DNS admin" if can_manage else "Read-only" }}</div>
+      </div>
+      <div class="kpi">
+        <span class="label">Account</span>
+        <div class="value mono">{{ user.email }}</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="card" id="tree">
+  <div class="form-actions" style="justify-content:space-between; margin-bottom: 14px;">
+    <div>
+      <h2 style="margin-bottom:4px;">Tree explorer</h2>
+      <p class="helper">Zones, records, forwarders, and delegations are all editable from here.</p>
+    </div>
+  </div>
+
+  <div class="dns-tree-layout">
+    <div class="dns-tree">
+      <details open>
+        <summary><strong>{{ server }}</strong></summary>
+        <div class="tree-node">
+          <details open id="forward-zones">
+            <summary>Forward Lookup Zones</summary>
+            <div class="tree-node">
+              <div class="form-actions" style="justify-content:space-between;">
+                <form method="get" action="{{ url_for('index') }}#forward-zones" class="form-grid" style="flex:1;">
+                  <div>
+                    <label for="zone_search">Filter zones</label>
+                    <input id="zone_search" name="zone_search" placeholder="contoso, 168.192, _msdcs" value="{{ zone_search }}">
+                  </div>
+                  <div class="form-actions">
+                    <button type="submit">Search</button>
+                    <a class="button secondary" href="{{ url_for('index') }}#forward-zones">Reset</a>
+                  </div>
+                </form>
+                {% if can_manage %}
+                  <button type="button" class="button" data-zone-modal="create">+ Zone</button>
+                {% endif %}
+              </div>
+              {{ render_zone_branch(forward_zone_rows, 'No zones matched your search.', 'forward') }}
+            </div>
+          </details>
+
+          <details id="reverse-zones">
+            <summary>Reverse Lookup Zones</summary>
+            <div class="tree-node">
+              <div class="form-actions" style="justify-content:space-between;">
+                <div class="helper">Reverse lookup zones live in their own branch like the DNS console.</div>
+              </div>
+              {{ render_zone_branch(reverse_zone_rows, 'No reverse lookup zones found.', 'reverse') }}
+            </div>
+          </details>
+        </div>
+      </details>
+    </div>
+
+    <aside class="zone-inspector" id="zoneInspector" data-default-zone="{{ zone }}">
+      <div class="zone-inspector-shell">
+        <div class="zone-inspector-header">
+          <div>
+            <div class="eyebrow">Selected zone</div>
+            <h2 id="selectedZoneName" class="zone-inspector-title mono">{{ zone }}</h2>
+            <div id="selectedZoneMeta" class="zone-summary-meta"></div>
+          </div>
+          {% if can_manage %}
+            <div class="form-actions">
+              <button type="button" class="button" data-selected-zone-add-record>+ Record</button>
+              <button type="button" class="button secondary" data-selected-zone-settings>⚙</button>
+            </div>
+          {% endif %}
+        </div>
+
+        <details class="zone-folder" id="selectedZoneRecords" data-zone-records-url="" data-zone-records-loaded="false" open>
+          <summary>Records</summary>
+          <div class="zone-folder-body" data-zone-records-body></div>
+        </details>
+
+        <details class="zone-folder" id="selectedZoneDelegations" data-zone-delegations-url="" data-zone-delegations-loaded="false">
+          <summary>Delegations</summary>
+          <div class="zone-folder-body" data-zone-delegations-body></div>
+        </details>
+
+        <details class="zone-folder" id="selectedZoneSettings">
+          <summary>Zone settings</summary>
+          <div class="zone-folder-body">
+            <div class="zone-meta" id="selectedZoneSettingsMeta"></div>
+            {% if can_manage %}
+              <div class="zone-actions">
+                <button type="button" class="button secondary" data-zone-age-toggle data-zone-name="" data-aging-enabled="false">⚙ Zone</button>
+                <button type="button" class="button danger" data-zone-delete data-zone-name="">- Zone</button>
+              </div>
+            {% endif %}
+          </div>
+        </details>
+      </div>
+    </aside>
+  </div>
+
+  <div class="tree-secondary">
+    <details id="forwarders">
+      <summary>Forwarders</summary>
+      <div class="tree-node">
+        <div class="form-actions" style="justify-content:space-between;">
+          <div class="helper">Changes apply to {{ server }}.</div>
+          {% if can_manage %}
+            <div class="form-actions">
+              <button type="button" class="button" data-forwarder-modal="add">+ Forwarder</button>
+              <button type="button" class="button secondary" data-forwarder-modal="remove">- Forwarder</button>
+            </div>
+          {% endif %}
+        </div>
+
+        {% if forwarder_rows %}
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>IP Address</th>
+                  <th>Use Recursion</th>
+                  <th>Timeout</th>
+                  {% if can_manage %}<th>Actions</th>{% endif %}
+                </tr>
+              </thead>
+              <tbody>
+                {% for forwarder in forwarder_rows %}
+                  <tr>
+                    <td class="mono">{{ forwarder.address }}</td>
+                    <td>{{ forwarder.use_recursion }}</td>
+                    <td class="mono">{{ forwarder.timeout }}</td>
+                    {% if can_manage %}
+                      <td>
+                        <div class="record-actions">
+                          <button type="button" class="icon-button secondary" data-forwarder-modal="manage" data-address="{{ forwarder.address }}">⚙</button>
+                          <button type="button" class="icon-button danger" data-forwarder-modal="remove" data-address="{{ forwarder.address }}">-</button>
+                        </div>
+                      </td>
+                    {% endif %}
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="empty-state">No forwarders are configured.</div>
+        {% endif %}
+      </div>
+    </details>
+
+    <details id="delegations">
+      <summary>Delegations</summary>
+      <div class="tree-node">
+        <div class="form-actions" style="justify-content:space-between;">
+          <form method="get" action="{{ url_for('index') }}#delegations" class="form-grid" style="flex:1;">
+            <div>
+              <label for="delegation_zone">Parent zone</label>
+              <input id="delegation_zone" name="delegation_zone" value="{{ delegation_zone }}" placeholder="contoso.com">
+            </div>
+            <div class="form-actions">
+              <button type="submit">Load zone</button>
+              <a class="button secondary" href="{{ url_for('index') }}#delegations">Reset</a>
+            </div>
+          </form>
+          {% if can_manage %}
+            <button type="button" class="button" data-delegation-modal="add" data-parent-zone="{{ delegation_zone }}">+ Delegation</button>
+          {% endif %}
+        </div>
+
+        {% if delegation_rows %}
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Child zone</th>
+                  <th>Name server</th>
+                  <th>IP address</th>
+                  {% if can_manage %}<th>Actions</th>{% endif %}
+                </tr>
+              </thead>
+              <tbody>
+                {% for delegation in delegation_rows %}
+                  <tr>
+                    <td class="mono">{{ delegation.child }}</td>
+                    <td class="mono">{{ delegation.ns }}</td>
+                    <td class="mono">{{ delegation.ip }}</td>
+                    {% if can_manage %}
+                      <td>
+                        <div class="record-actions">
+                          <button type="button" class="icon-button secondary" data-delegation-modal="manage" data-parent-zone="{{ delegation_zone }}" data-child-zone="{{ delegation.child }}" data-name-server="{{ delegation.ns }}" data-ip-address="{{ delegation.ip }}">⚙</button>
+                          <button type="button" class="icon-button danger" data-delegation-modal="remove" data-parent-zone="{{ delegation_zone }}" data-child-zone="{{ delegation.child }}">-</button>
+                        </div>
+                      </td>
+                    {% endif %}
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="empty-state">No delegations were found for this zone.</div>
+        {% endif %}
+      </div>
+    </details>
+  </div>
+</section>
+{% endblock %}
+
+{% block page_scripts %}
+{% if can_manage %}
+<dialog id="zoneModal" class="record-dialog" aria-labelledby="zoneModalTitle">
+  <div class="record-dialog-panel">
+    <div class="record-dialog-header">
+      <div>
+        <div class="eyebrow">DNS zone</div>
+        <h3 id="zoneModalTitle" class="record-dialog-title">Zone action</h3>
+      </div>
+      <button type="button" class="secondary" data-zone-modal-close>Close</button>
+    </div>
+    <p id="zoneModalSummary" class="record-dialog-summary"></p>
+    <form method="post" action="/zones" id="zoneModalForm" class="form-grid">
+      <input type="hidden" name="action" id="zoneModalAction">
+      <input type="hidden" name="zone_name" id="zoneModalZoneName">
+      <input type="hidden" name="aging_enabled" id="zoneModalAgingEnabled">
+      <input type="hidden" name="return_to" value="{{ url_for('index') }}#forward-zones">
+      <div class="dialog-section" id="zoneCreateFields">
+        <div class="form-row">
+          <div>
+            <label for="zoneModalZoneType">Zone type</label>
+            <select id="zoneModalZoneType" name="zone_type">
+              <option value="primary">Primary</option>
+              <option value="secondary">Secondary</option>
+              <option value="stub">Stub</option>
+            </select>
+          </div>
+          <div>
+            <label for="zoneModalReplication">Replication scope</label>
+            <input id="zoneModalReplication" name="replication_scope" value="Forest" placeholder="Forest or Domain">
+          </div>
+        </div>
+          <div class="form-row">
+            <div>
+              <label for="zoneModalZoneNameInput">Zone name</label>
+            <input id="zoneModalZoneNameInput" placeholder="lab.contoso.com">
+          </div>
+          <div>
+            <label for="zoneModalReverseNetwork">Reverse network ID</label>
+            <input id="zoneModalReverseNetwork" name="reverse_network" placeholder="10.1.0.0/24">
+          </div>
+        </div>
+        <div class="form-row">
+          <div>
+            <label for="zoneModalMasterServers">Master servers</label>
+            <input id="zoneModalMasterServers" name="master_servers" placeholder="10.0.0.10,10.0.0.11">
+          </div>
+          <div>
+            <label for="zoneModalZoneFile">Zone file</label>
+            <input id="zoneModalZoneFile" name="zone_file" placeholder="lab.contoso.com.dns">
+          </div>
+        </div>
+        <p class="helper">Use a zone name for forward zones and a reverse network ID for reverse lookup zones. Master servers are required for secondary and stub zones.</p>
+      </div>
+      <div class="dialog-section field-hidden" id="zoneManageFields">
+        <p class="helper" id="zoneManageHelp"></p>
+      </div>
+      <div class="dialog-section field-hidden" id="zoneDeleteFields">
+        <p class="helper">This deletes the zone immediately.</p>
+      </div>
+      <div class="form-actions" style="justify-content:flex-end;">
+        <button type="button" class="secondary" data-zone-modal-close>Cancel</button>
+        <button type="submit" id="zoneModalSubmit">Save</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<dialog id="forwarderModal" class="record-dialog" aria-labelledby="forwarderModalTitle">
+  <div class="record-dialog-panel">
+    <div class="record-dialog-header">
+      <div>
+        <div class="eyebrow">DNS forwarder</div>
+        <h3 id="forwarderModalTitle" class="record-dialog-title">Forwarder action</h3>
+      </div>
+      <button type="button" class="secondary" data-forwarder-modal-close>Close</button>
+    </div>
+    <p id="forwarderModalSummary" class="record-dialog-summary"></p>
+    <form method="post" action="/forwarders" id="forwarderModalForm" class="form-grid">
+      <input type="hidden" name="action" id="forwarderModalAction">
+      <input type="hidden" name="return_to" value="{{ url_for('index') }}#forwarders">
+      <div>
+        <label for="forwarderModalAddresses">Addresses</label>
+        <input id="forwarderModalAddresses" name="addresses" placeholder="10.0.0.1,10.0.0.2">
+        <div class="helper">Separate IP addresses with commas or new lines.</div>
+      </div>
+      <div class="form-actions" style="justify-content:flex-end;">
+        <button type="button" class="secondary" data-forwarder-modal-close>Cancel</button>
+        <button type="submit" id="forwarderModalSubmit">Save</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<dialog id="delegationModal" class="record-dialog" aria-labelledby="delegationModalTitle">
+  <div class="record-dialog-panel">
+    <div class="record-dialog-header">
+      <div>
+        <div class="eyebrow">DNS delegation</div>
+        <h3 id="delegationModalTitle" class="record-dialog-title">Delegation action</h3>
+      </div>
+      <button type="button" class="secondary" data-delegation-modal-close>Close</button>
+    </div>
+    <p id="delegationModalSummary" class="record-dialog-summary"></p>
+    <form method="post" action="/delegations" id="delegationModalForm" class="form-grid">
+      <input type="hidden" name="action" id="delegationModalAction">
+      <input type="hidden" name="return_to" value="{{ url_for('index') }}#delegations">
+      <div class="form-row">
+        <div>
+          <label for="delegationModalParentZone">Parent zone</label>
+          <input id="delegationModalParentZone" name="parent_zone" value="{{ delegation_zone }}">
+        </div>
+        <div>
+          <label for="delegationModalChildZone">Child zone</label>
+          <input id="delegationModalChildZone" name="child_zone" placeholder="west01">
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label for="delegationModalNameServer">Name server</label>
+          <input id="delegationModalNameServer" name="name_server" placeholder="ns1.west01.contoso.com">
+        </div>
+        <div>
+          <label for="delegationModalIpAddress">IP address</label>
+          <input id="delegationModalIpAddress" name="ip_address" placeholder="10.0.0.25">
+        </div>
+      </div>
+      <div class="form-actions" style="justify-content:flex-end;">
+        <button type="button" class="secondary" data-delegation-modal-close>Cancel</button>
+        <button type="submit" id="delegationModalSubmit">Save</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<script>
+  (() => {
+    const zoneModal = document.getElementById('zoneModal');
+    const zoneTitle = document.getElementById('zoneModalTitle');
+    const zoneSummary = document.getElementById('zoneModalSummary');
+    const zoneForm = document.getElementById('zoneModalForm');
+    const zoneAction = document.getElementById('zoneModalAction');
+    const zoneName = document.getElementById('zoneModalZoneName');
+    const agingEnabled = document.getElementById('zoneModalAgingEnabled');
+    const zoneCreateFields = document.getElementById('zoneCreateFields');
+    const zoneManageFields = document.getElementById('zoneManageFields');
+    const zoneDeleteFields = document.getElementById('zoneDeleteFields');
+    const zoneManageHelp = document.getElementById('zoneManageHelp');
+    const zoneSubmit = document.getElementById('zoneModalSubmit');
+    const zoneType = document.getElementById('zoneModalZoneType');
+    const replicationScope = document.getElementById('zoneModalReplication');
+    const zoneNameInput = document.getElementById('zoneModalZoneNameInput');
+    const reverseNetwork = document.getElementById('zoneModalReverseNetwork');
+    const masterServers = document.getElementById('zoneModalMasterServers');
+    const zoneFile = document.getElementById('zoneModalZoneFile');
+
+    function hide(el, shouldHide) {
+      if (!el) return;
+      el.classList.toggle('field-hidden', shouldHide);
+    }
+
+    function openZoneModal(mode, payload = {}) {
+      const name = payload.zoneName || payload.name || '';
+      const aged = payload.agingEnabled === 'true' || payload.agingEnabled === true;
+      zoneTitle.textContent = mode === 'delete' ? 'Delete zone' : mode === 'aging' ? 'Zone aging' : 'Create zone';
+      zoneSummary.textContent = name ? name : 'Create or manage a DNS zone.';
+      zoneAction.value = mode === 'delete' ? 'delete' : mode === 'aging' ? 'aging' : 'create';
+      zoneName.value = name;
+      agingEnabled.value = aged ? 'off' : 'on';
+      zoneSubmit.textContent = mode === 'delete' ? 'Delete zone' : mode === 'aging' ? (aged ? 'Disable aging' : 'Enable aging') : 'Create zone';
+      hide(zoneCreateFields, mode !== 'create');
+      hide(zoneManageFields, mode === 'create');
+      hide(zoneDeleteFields, mode !== 'delete');
+      if (mode === 'aging') {
+        zoneManageHelp.textContent = `${name} currently has aging ${aged ? 'enabled' : 'disabled'}.`;
+      }
+      if (mode === 'create') {
+        zoneType.value = payload.zoneType || 'primary';
+        replicationScope.value = payload.replicationScope || 'Forest';
+        zoneNameInput.value = payload.zoneName || '';
+        reverseNetwork.value = payload.reverseNetwork || '';
+        masterServers.value = payload.masterServers || '';
+        zoneFile.value = payload.zoneFile || '';
+      }
+      zoneModal.showModal();
+    }
+
+    function openForwarderModal(mode, payload = {}) {
+      const modal = document.getElementById('forwarderModal');
+      const title = document.getElementById('forwarderModalTitle');
+      const summary = document.getElementById('forwarderModalSummary');
+      const action = document.getElementById('forwarderModalAction');
+      const addresses = document.getElementById('forwarderModalAddresses');
+      const submit = document.getElementById('forwarderModalSubmit');
+      const actionValue = mode === 'remove' ? 'remove' : 'add';
+      const address = payload.address || '';
+      title.textContent = actionValue === 'remove' ? 'Remove forwarder' : (mode === 'manage' ? 'Update forwarder' : 'Add forwarder');
+      summary.textContent = address ? `Forwarder ${address}` : 'Add or remove DNS forwarders.';
+      action.value = actionValue;
+      addresses.value = address;
+      submit.textContent = actionValue === 'remove' ? 'Remove forwarder(s)' : 'Add forwarder(s)';
+      modal.showModal();
+      addresses.focus();
+    }
+
+    function openDelegationModal(mode, payload = {}) {
+      const modal = document.getElementById('delegationModal');
+      const title = document.getElementById('delegationModalTitle');
+      const summary = document.getElementById('delegationModalSummary');
+      const action = document.getElementById('delegationModalAction');
+      const parentZone = document.getElementById('delegationModalParentZone');
+      const childZone = document.getElementById('delegationModalChildZone');
+      const nameServer = document.getElementById('delegationModalNameServer');
+      const ipAddress = document.getElementById('delegationModalIpAddress');
+      const submit = document.getElementById('delegationModalSubmit');
+      const actionValue = mode === 'remove' ? 'remove' : 'add';
+      title.textContent = actionValue === 'remove' ? 'Remove delegation' : (mode === 'manage' ? 'Update delegation' : 'Add delegation');
+      summary.textContent = payload.childZone ? `Child zone ${payload.childZone}` : `Delegations in ${payload.parentZone || parentZone.value}`;
+      action.value = actionValue;
+      parentZone.value = payload.parentZone || parentZone.value;
+      childZone.value = payload.childZone || '';
+      nameServer.value = payload.nameServer || '';
+      ipAddress.value = payload.ipAddress || '';
+      submit.textContent = actionValue === 'remove' ? 'Remove delegation' : 'Add delegation';
+      modal.showModal();
+      childZone.focus();
+    }
+
+    window.openZoneModal = openZoneModal;
+    window.openForwarderModal = openForwarderModal;
+    window.openDelegationModal = openDelegationModal;
+
+    document.addEventListener('click', (event) => {
+      const zoneTrigger = event.target.closest('[data-zone-modal]');
+      if (zoneTrigger) {
+        openZoneModal(zoneTrigger.dataset.zoneModal, zoneTrigger.dataset);
+        return;
+      }
+      const forwarderTrigger = event.target.closest('[data-forwarder-modal]');
+      if (forwarderTrigger) {
+        openForwarderModal(forwarderTrigger.dataset.forwarderModal, forwarderTrigger.dataset);
+        return;
+      }
+      const delegationTrigger = event.target.closest('[data-delegation-modal]');
+      if (delegationTrigger) {
+        openDelegationModal(delegationTrigger.dataset.delegationModal, delegationTrigger.dataset);
+        return;
+      }
+      if (event.target.closest('[data-zone-modal-close]')) {
+        zoneModal.close();
+      }
+      if (event.target.closest('[data-forwarder-modal-close]')) {
+        document.getElementById('forwarderModal').close();
+      }
+      if (event.target.closest('[data-delegation-modal-close]')) {
+        document.getElementById('delegationModal').close();
+      }
+    });
+
+    document.querySelectorAll('[data-zone-age-toggle]').forEach((button) => {
+      button.addEventListener('click', () => openZoneModal('aging', button.dataset));
+    });
+    document.querySelectorAll('[data-zone-delete]').forEach((button) => {
+      button.addEventListener('click', () => openZoneModal('delete', button.dataset));
+    });
+    zoneForm.addEventListener('submit', () => {
+      if (zoneAction.value === 'create') {
+        zoneName.value = zoneNameInput.value;
+      }
+    });
+  })();
+</script>
+{% endif %}
+{% endblock %}

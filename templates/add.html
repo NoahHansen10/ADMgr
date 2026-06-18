@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="split">
+  <div class="card">
+    <h2>Add DNS Record</h2>
+    <p>Create a new DNS record in <span class="mono">{{ zone }}</span> or in any other zone you can manage.</p>
+
+    <form method="post" class="form-grid">
+      <div class="form-row">
+        <div>
+          <label for="zone">Zone</label>
+          <input id="zone" name="zone" value="{{ zone }}" placeholder="contoso.com">
+        </div>
+        <div>
+          <label for="type">Type</label>
+          <select id="type" name="type">
+            <option>A</option>
+            <option>AAAA</option>
+            <option>CNAME</option>
+            <option>NS</option>
+            <option>MX</option>
+            <option>SRV</option>
+            <option>PTR</option>
+            <option>TXT</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div>
+          <label for="name">Name</label>
+          <input id="name" name="name" placeholder="grafana" required>
+        </div>
+        <div>
+          <label for="ttl">TTL seconds</label>
+          <input id="ttl" name="ttl" value="3600" inputmode="numeric" required>
+        </div>
+      </div>
+
+      <div>
+        <label for="value">Target</label>
+        <input id="value" name="value" placeholder="192.168.1.50 or target.host.local" required>
+        <div class="helper">A and AAAA records use IP addresses. CNAME, NS, MX, SRV, and PTR use hostnames. TXT uses plain text.</div>
+      </div>
+
+      <div class="form-row">
+        <div>
+          <label for="preference">Preference</label>
+          <input id="preference" name="preference" inputmode="numeric" placeholder="10">
+        </div>
+        <div>
+          <label for="priority">Priority</label>
+          <input id="priority" name="priority" inputmode="numeric" placeholder="0">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div>
+          <label for="weight">Weight</label>
+          <input id="weight" name="weight" inputmode="numeric" placeholder="0">
+        </div>
+        <div>
+          <label for="port">Port</label>
+          <input id="port" name="port" inputmode="numeric" placeholder="443">
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit">Add record</button>
+        <a class="button secondary" href="/records">Cancel</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>Notes</h3>
+    <p class="helper">The page and the modal both feed the same service-account-backed write path, so the record type support stays consistent no matter which entry point you use.</p>
+    <div class="rule"></div>
+    <p class="helper">Changes are submitted through the configured service-account path, so the web UI stays separate from the DNS permission boundary.</p>
+  </div>
+</section>
+{% endblock %}

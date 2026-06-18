@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="split">
+  <div class="card">
+    <h2>Forwarders</h2>
+    <p>Inspect the server forwarder list and add or remove one or more resolver IPs.</p>
+
+    <div class="form-actions">
+      {% if can_manage %}
+        <button type="button" class="button" data-forwarder-modal="add">Add forwarder</button>
+        <button type="button" class="button secondary" data-forwarder-modal="remove">Remove forwarder</button>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<section class="card">
+  <div class="form-actions" style="justify-content:space-between; margin-bottom: 14px;">
+    <div>
+      <h2 style="margin-bottom:4px;">Configured forwarders</h2>
+      <p class="helper">Changes apply to {{ server }}.</p>
+    </div>
+  </div>
+
+  {% if forwarder_rows %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>IP Address</th>
+            <th>Use Recursion</th>
+            <th>Timeout</th>
+            {% if can_manage %}<th>Actions</th>{% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for forwarder in forwarder_rows %}
+            <tr>
+              <td class="mono">{{ forwarder.address }}</td>
+              <td>{{ forwarder.use_recursion }}</td>
+              <td class="mono">{{ forwarder.timeout }}</td>
+              {% if can_manage %}
+                <td>
+                  <div class="record-actions">
+                    <button type="button" class="icon-button secondary" data-forwarder-modal="manage" data-address="{{ forwarder.address }}">⚙</button>
+                    <button type="button" class="icon-button danger" data-forwarder-modal="remove" data-address="{{ forwarder.address }}">-</button>
+                  </div>
+                </td>
+              {% endif %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state">No forwarders are configured.</div>
+  {% endif %}
+</section>
+
+{% if can_manage %}
+<dialog id="forwarderModal" class="record-dialog" aria-labelledby="forwarderModalTitle">
+  <div class="record-dialog-panel">
+    <div class="record-dialog-header">
+      <div>
+        <div class="eyebrow">DNS forwarder</div>
+        <h3 id="forwarderModalTitle" class="record-dialog-title">Forwarder action</h3>
+      </div>
+      <button type="button" class="secondary" data-forwarder-modal-close>Close</button>
+    </div>
+    <p id="forwarderModalSummary" class="record-dialog-summary"></p>
+    <form method="post" action="/forwarders" id="forwarderModalForm" class="form-grid">
+      <input type="hidden" name="action" id="forwarderModalAction">
+      <div>
+        <label for="forwarderModalAddresses">Addresses</label>
+        <input id="forwarderModalAddresses" name="addresses" placeholder="10.0.0.1,10.0.0.2">
+        <div class="helper">Separate IP addresses with commas or new lines.</div>
+      </div>
+      <div class="form-actions" style="justify-content:flex-end;">
+        <button type="button" class="secondary" data-forwarder-modal-close>Cancel</button>
+        <button type="submit" id="forwarderModalSubmit">Save</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+{% endif %}
+
+{% block page_scripts %}
+{% if can_manage %}
+<script>
+  (() => {
+    const modal = document.getElementById('forwarderModal');
+    const title = document.getElementById('forwarderModalTitle');
+    const summary = document.getElementById('forwarderModalSummary');
+    const form = document.getElementById('forwarderModalForm');
+    const action = document.getElementById('forwarderModalAction');
+    const addresses = document.getElementById('forwarderModalAddresses');
+    const submit = document.getElementById('forwarderModalSubmit');
+
+    function openForwarderModal(mode, payload = {}) {
+      const actionValue = mode === 'remove' ? 'remove' : 'add';
+      const address = payload.address || '';
+      title.textContent = actionValue === 'remove' ? 'Remove forwarder' : (mode === 'manage' ? 'Update forwarder' : 'Add forwarder');
+      summary.textContent = address ? `Forwarder ${address}` : 'Add or remove DNS forwarders.';
+      action.value = actionValue;
+      addresses.value = address;
+      submit.textContent = actionValue === 'remove' ? 'Remove forwarder(s)' : 'Add forwarder(s)';
+      modal.showModal();
+      addresses.focus();
+    }
+
+    window.openForwarderModal = openForwarderModal;
+    document.addEventListener('click', (event) => {
+      const trigger = event.target.closest('[data-forwarder-modal]');
+      if (trigger) {
+        openForwarderModal(trigger.dataset.forwarderModal, trigger.dataset);
+        return;
+      }
+      if (event.target.closest('[data-forwarder-modal-close]')) {
+        modal.close();
+      }
+    });
+  })();
+</script>
+{% endif %}
+{% endblock %}
+{% endblock %}
