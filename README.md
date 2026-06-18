@@ -58,8 +58,8 @@ cp .env.example .env
 Set at least these variables in `.env`:
 
 ```dotenv
-DNS_ZONE=local.ndhansen.com
-DNS_SERVER=dc01.local.ndhansen.com
+DNS_ZONE=example.com
+DNS_SERVER=dc01.example.com
 DNS_EXECUTION_MODE=winrm
 WINRM_AUTH=Kerberos
 WINRM_USE_SSL=false
